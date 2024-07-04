@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import logging
 import os
+os.environ['DISPLAY'] = '1'
 from argparse import ArgumentParser
 
 from mmengine.logging import print_log
