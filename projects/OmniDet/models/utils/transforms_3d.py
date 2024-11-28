@@ -6,8 +6,16 @@ import torch
 from mmcv.transforms import BaseTransform
 from PIL import Image
 
-from mmdet3d.datasets import GlobalRotScaleTrans
+from mmdet3d.datasets import GlobalRotScaleTrans, ObjectRangeFilter
 from mmdet3d.registry import TRANSFORMS
+
+
+# @TRANSFORMS.register_module()
+# class ObjectRangeFilterbyClass(ObjectRangeFilter):
+
+#     def __init__(self, point_cloud_range: Dict[str, Float]) -> None:
+#         self.pcd_range = point_cloud_range
+
 
 
 @TRANSFORMS.register_module()

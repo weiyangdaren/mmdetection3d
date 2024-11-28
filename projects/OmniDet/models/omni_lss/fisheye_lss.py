@@ -137,7 +137,7 @@ class BaseViewTransform(nn.Module):
         x = x[kept]
         geom_feats = geom_feats[kept]
 
-        x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1])
+        x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1], mean_pool=True)
 
         # collapse Z
         final = torch.cat(x.unbind(dim=2), 1)

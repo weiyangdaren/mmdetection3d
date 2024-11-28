@@ -154,7 +154,15 @@ class OmniLSS(Base3DDetector):
         batch_data_samples: List[Det3DDataSample],
         **kwargs
     ) -> List[Det3DDataSample]:
-        pass
+
+        batch_input_metas = [item.metainfo for item in batch_data_samples]
+        img_feat, bev_feat = self.extract_feat(batch_inputs_dict, batch_input_metas)
+
+        if self.with_bbox_head:
+            outputs = self.bbox_head.predict(bev_feat, batch_data_samples)
+
+        res = self.add_pred_to_datasample(batch_data_samples, outputs)
+        return res
 
     def loss(
         self,

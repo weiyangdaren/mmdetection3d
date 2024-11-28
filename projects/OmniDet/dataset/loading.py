@@ -73,7 +73,10 @@ class LoadOmni3DPointsFromFile(LoadPointsFromFile):
         points = points_class(
             points, points_dim=points.shape[-1], attribute_dims=attribute_dims)
 
-        results[f'{self.load_point_type}_points'] = points
+        if self.load_point_type == 'lidar':
+            results['points'] = points
+        else:
+            results[f'{self.load_point_type}_points'] = points
         return results
 
 

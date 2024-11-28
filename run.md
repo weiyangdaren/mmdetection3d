@@ -17,5 +17,17 @@ python tools/train.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py
 
 # Test
 ```bash
+python tools/test.py projects/OmniDet/configs/base_config.py work_dirs/base_config/epoch_14.pth
 python tools/test.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py work_dirs/petr_vovnet_gridmask_p4_800x320/epoch_24.pth
+```
+
+
+# visual
+```bash
+python tools/test.py projects/OmniDet/configs/base_config.py work_dirs/base_config/epoch_20.pth --show --show-dir work_dirs --task multi-view_det
+
+python tools/misc/visualize_results.py projects/OmniDet/configs/base_config.py --result ${RESULTS_PATH} --show-dir ${SHOW_DIR}
+
+python tools/misc/browse_dataset.py projects/OmniDet/configs/base_config.py --task lidar_det --output-dir work_dirs
+
 ```

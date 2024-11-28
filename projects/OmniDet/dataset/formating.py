@@ -77,13 +77,14 @@ class OmniPack3DDetInputs(Pack3DDetInputs):
                             'cam2global', 'crop_offset', 'img_crop_offset',
                             'resize_img_shape', 'lidar2cam', 'ori_lidar2img',
                             'num_ref_frames', 'num_views', 'ego2global',
-                            'axis_align_matrix')
-    ) -> None:
+                            'axis_align_matrix'),
+        input_point_keys: tuple = ('lidar_points', 'semantic_lidar_points'),
+        input_img_keys: tuple = ('img', 'cam_rgb', 'cam_nusc', 'cam_dvs',
+                                 'cam_fisheye'),) -> None:
         self.keys = keys
         self.meta_keys = meta_keys
-        self.input_point_keys = ['lidar_points', 'semantic_lidar_points']
-        self.input_img_keys = ['img', 'cam_rgb',
-                               'cam_nusc', 'cam_dvs', 'cam_fisheye']
+        self.input_point_keys = input_point_keys
+        self.input_img_keys = input_img_keys
     
 
     def pack_single_results(self, results: dict) -> dict:
