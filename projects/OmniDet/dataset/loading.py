@@ -109,30 +109,28 @@ class LoadOmni3DMultiViewImageFromFiles(LoadMultiViewImageFromFiles):
                          set_default_scale)
 
     def transform(self, results: dict) -> Optional[dict]:
-        filename, lidar2cam, cam2lidar, lidar2img, img2lidar, cam2img = [], [], [], [], [], []
+        filename, lidar2cam, cam2lidar, lidar2img, cam2img = [], [], [], [], []
         ret_dict = dict()
 
         for cam_name in self.load_cam_names:
             filename.append(results['cam_info']
                             [self.load_cam_type][cam_name]['cam_path'])
             lidar2cam.append(
-                results['cam_info'][self.load_cam_type][cam_name]['lidar2sensor'])
+                results['cam_info'][self.load_cam_type][cam_name]['lidar2cam'])
             cam2lidar.append(
-                results['cam_info'][self.load_cam_type][cam_name]['sensor2lidar'])
+                results['cam_info'][self.load_cam_type][cam_name]['cam2lidar'])
             lidar2img.append(
                 results['cam_info'][self.load_cam_type][cam_name]['lidar2img'])
-            img2lidar.append(
-                results['cam_info'][self.load_cam_type][cam_name]['img2lidar'])
-            if self.load_cam_type != 'cam_fisheye':
-                cam_intrinsic = np.eye(4)
-                cam_intrinsic[:3, :3] = results['cam_info'][self.load_cam_type][cam_name]['cam_intrinsic']
-                cam2img.append(cam_intrinsic)
+            cam2img.append(
+                results['cam_info'][self.load_cam_type][cam_name]['cam2img'])
+                # cam_intrinsic = np.eye(4)
+                # cam_intrinsic[:3, :3] = results['cam_info'][self.load_cam_type][cam_name]['cam_intrinsic']
+                # cam2img.append(cam_intrinsic)
 
         ret_dict['img_path'] = filename
         ret_dict['lidar2cam'] = np.stack(lidar2cam, axis=0)
         ret_dict['cam2lidar'] = np.stack(cam2lidar, axis=0)
         ret_dict['lidar2img'] = np.stack(lidar2img, axis=0)
-        ret_dict['img2lidar'] = np.stack(img2lidar, axis=0)
         if self.load_cam_type != 'cam_fisheye':
             ret_dict['cam2img'] = np.stack(cam2img, axis=0)
             ret_dict['ori_cam2img'] = copy.deepcopy(ret_dict['cam2img'])

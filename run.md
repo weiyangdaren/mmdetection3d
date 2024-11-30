@@ -6,7 +6,7 @@ python demo/pcd_demo.py demo/data/kitti/000008.bin configs/my_cfgs/pointpillars_
 # Prepare data
 ```bash
 python tools/create_data.py nuscenes --root-path data/nuscenes --version v1.0-mini --extra-tag mini --workers 32
-python tools/create_data.py omni3d --root-path data/CarlaCollection --version 2hz-all --extra-tag mmdet3d --workers 32
+python projects/OmniDet/tools/omni_converter.py
 ```
 
 # Train

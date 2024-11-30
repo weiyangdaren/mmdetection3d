@@ -1,8 +1,8 @@
-from collections import OrderedDict
+from projects.OmniDet.tools.omni_calib import  OmniCalib, parse_sensor_transform
+
 from pathlib import Path
 from concurrent import futures as futures
 
-import mmcv
 import mmengine
 import numpy as np
 import json
@@ -12,8 +12,15 @@ from collections import defaultdict
 import sys
 sys.path.append(Path(__file__).resolve().parents[1].as_posix())
 
-from tools.omni_utils import LoadCarlaText, TransformUtils
-from configs.dataset_cfg import CATEGORIES
+CATEGORIES = {
+    "Car": 0,
+    "Van": 1,
+    "Truck": 2,
+    "Bus": 3,
+    "Pedestrian": 4,
+    "Cyclist": 5,
+}
+
 
 def _read_imageset_file(path):
     assert Path(path).exists(), f'{path} does not exist'
@@ -40,7 +47,7 @@ def create_sensor_transform(data_path, sample_list, num_workers=4):
     def process_single_sensor(scene_ego_sensor_pair):
         scene, ego, sensor = scene_ego_sensor_pair
         sensor_transform_file = data_path / scene / ego / sensor / 'sensor_metadata.txt'
-        sensor_transform = LoadCarlaText.load_sensor_transform(
+        sensor_transform = parse_sensor_transform(
             sensor_transform_file) if sensor_transform_file.exists() else None
         return (scene, ego), {sensor: sensor_transform}
 
@@ -68,7 +75,8 @@ def create_sensor_transform(data_path, sample_list, num_workers=4):
 def get_omni3d_info(root_path,
                     num_worker=8,
                     sample_list=None,
-                    sensor_transform=None):
+                    sensor_transform=None,
+                    total_cam=None):
     root_path = Path(root_path)
     cam_rgb = ['rgb_camera_front', 'rgb_camera_left',
                'rgb_camera_right', 'rgb_camera_rear']
@@ -78,11 +86,9 @@ def get_omni3d_info(root_path,
                    'fisheye_camera_right', 'fisheye_camera_rear']
     cam_dvs = ['dvs_camera_front', 'dvs_camera_left',
                'dvs_camera_right', 'dvs_camera_rear']
-    total_cam = {'cam_rgb': cam_rgb, 'cam_nusc': cam_nusc,
-                 'cam_fisheye': cam_fisheye, 'cam_dvs': cam_dvs}
-    view_fov = {'cam_rgb': 98.5, 'cam_nusc': 90,
-                'cam_fisheye': 220, 'cam_dvs': 104.7}
-    from ocamcamera import OcamCamera
+    if total_cam is None:
+        total_cam = {'cam_rgb': cam_rgb, 'cam_nusc': cam_nusc,
+                    'cam_fisheye': cam_fisheye, 'cam_dvs': cam_dvs}
 
     def map_func(token):
         scene_name, vehicle_name, weather, frame_id, prev_id, next_id = token['scene_name'], token[
@@ -113,37 +119,29 @@ def get_omni3d_info(root_path,
                     cam_info[cam_type][cam_name].update(
                         {'cam_npz_path': cam_npz_path})
 
-                # get extrinsic
-                cam_transform = sensor_transform_info[cam_name].get(
-                    frame_id, None)
-                sensor2lidar = TransformUtils.get_sensor_to_sensor_matrix(
-                    cam_transform, lidar_transform, use_right_handed_coordinate=True)
-                img2lidar = TransformUtils.convert_img_to_3d_coord(
-                    sensor2lidar)
-                lidar2sensor = TransformUtils.get_sensor_to_sensor_matrix(
-                    lidar_transform, cam_transform, use_right_handed_coordinate=True)
-                lidar2img = TransformUtils.convert_3d_to_img_coord(
-                    lidar2sensor)
-                cam_info[cam_type][cam_name].update(
-                    {'sensor2lidar': sensor2lidar, 'img2lidar': img2lidar, 'lidar2sensor': lidar2sensor, 'lidar2img': lidar2img})
-
                 # get intrinsic
                 cam_path = root_path / cam_path
                 image = Image.open(cam_path).convert("RGB")
                 width, height = image.size  # Get width and height
                 cam_info[cam_type][cam_name].update(
                     {'image_size': (width, height)})
-                if cam_type != 'cam_fisheye':
-                    intrinsic = TransformUtils.get_camera_intrinsics(
-                        height, width, view_fov[cam_type])
-                    cam_info[cam_type][cam_name].update(
-                        {'cam_intrinsic': intrinsic})
-                else:
-                    ocam_path = root_path / 'calib_results.txt'
-                    ocam = OcamCamera(filename=ocam_path,
-                                      fov=view_fov[cam_type])
-                    cam_info[cam_type][cam_name].update(
-                        {'cam_intrinsic': ocam})
+                cam_transform = sensor_transform_info[cam_name].get(
+                    frame_id, None)
+
+                omni_calib = OmniCalib(
+                    cam_type=cam_type,
+                    sensor_transform=cam_transform,
+                    lidar_transform=lidar_transform,
+                    img_height=height,
+                    img_width=width,
+                    ocam_path=root_path / 'calib_results.txt')
+
+                cam_info[cam_type][cam_name].update(
+                    {'cam2img': omni_calib.cam2img, 
+                     'cam2lidar': omni_calib.cam2lidar, 
+                     'lidar2cam': omni_calib.lidar2cam, 
+                     'lidar2img': omni_calib.lidar2img})
+
         info['cam_info'] = cam_info
 
         # get label
@@ -168,10 +166,11 @@ def create_omni3d_infos(root_path,
                         info_prefix='omni3d',
                         version='2hz-mini',
                         save_path=None,
-                        workers=8):
+                        workers=8,
+                        total_cam=None):
     metainfo = {
         'categories': CATEGORIES,
-        'dataset': 'omni3d', 
+        'dataset': 'omni3d',
         'version': version
     }
 
@@ -198,14 +197,16 @@ def create_omni3d_infos(root_path,
     omni3d_infos_train = get_omni3d_info(root_path,
                                          workers,
                                          sample_list=train_img_ids,
-                                         sensor_transform=transform_dict)
+                                         sensor_transform=transform_dict,
+                                         total_cam=total_cam)
     infos_to_save = {'data_list': omni3d_infos_train, 'metainfo': metainfo}
     mmengine.dump(infos_to_save, save_path / f'{info_prefix}_infos_train.pkl')
 
     omni3d_infos_val = get_omni3d_info(root_path,
                                        workers,
                                        sample_list=val_img_ids,
-                                       sensor_transform=transform_dict)
+                                       sensor_transform=transform_dict,
+                                       total_cam=total_cam)
     infos_to_save = {'data_list': omni3d_infos_val, 'metainfo': metainfo}
     mmengine.dump(infos_to_save, save_path / f'{info_prefix}_infos_val.pkl')
     print('Done!')
@@ -214,11 +215,16 @@ def create_omni3d_infos(root_path,
 if __name__ == '__main__':
     root_path = 'data/CarlaCollection'
     info_prefix = 'omni3d'
-    version = '2hz-mini'
+    version = '10hz-mini'
     save_path = None
     workers = 32
+    total_cam = {
+        'cam_nusc': ['nu_rgb_camera_front', 'nu_rgb_camera_front_left', 'nu_rgb_camera_front_right',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left', 'nu_rgb_camera_rear'],
+    }
     create_omni3d_infos(root_path,
                         info_prefix=info_prefix,
                         version=version,
                         save_path=save_path,
-                        workers=workers)
+                        workers=workers,
+                        total_cam=total_cam)
