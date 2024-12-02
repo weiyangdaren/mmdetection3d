@@ -37,9 +37,12 @@ class BaseViewTransform(nn.Module):
         self.dbound = dbound
 
         dx, bx, nx = gen_dx_bx(self.xbound, self.ybound, self.zbound)
-        self.dx = nn.Parameter(dx, requires_grad=False)
-        self.bx = nn.Parameter(bx, requires_grad=False)
-        self.nx = nn.Parameter(nx, requires_grad=False)
+        # self.dx = nn.Parameter(dx, requires_grad=False)
+        # self.bx = nn.Parameter(bx, requires_grad=False)
+        # self.nx = nn.Parameter(nx, requires_grad=False)
+        self.register_buffer('dx', dx)
+        self.register_buffer('bx', bx)
+        self.register_buffer('nx', nx)
 
         self.C = out_channels
         self.frustum = self.create_frustum()

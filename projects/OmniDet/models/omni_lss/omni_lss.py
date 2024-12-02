@@ -51,11 +51,12 @@ class OmniLSS(Base3DDetector):
         self.lidar_key = self.extra_config.get('lidar_key', 'lidar_points')
         self.depth_supervision = self.extra_config.get('depth_supervision', False)
 
-        self.init_weights()
+    #     self.init_weights()
 
-    def init_weights(self) -> None:
-        if self.img_backbone is not None:
-            self.img_backbone.init_weights()
+    # def init_weights(self) -> None:
+        # pass
+        # if self.img_backbone is not None:
+        #     self.img_backbone.init_weights()
 
     @property
     def with_bbox_head(self):
@@ -122,8 +123,8 @@ class OmniLSS(Base3DDetector):
         img_aug_matrix, lidar_aug_matrix = [], []
         for i, meta in enumerate(batch_input_metas):
             lidar2image.append(meta[self.img_key]['lidar2img'])
-            camera_intrinsics.append(meta[self.img_key].get('cam2img', np.eye(4)))
-            camera2lidar.append(meta['cam2lidar'])
+            camera_intrinsics.append(meta[self.img_key]['cam2img'])
+            camera2lidar.append(meta[self.img_key]['cam2lidar'])
             img_aug_matrix.append(meta[self.img_key].get('img_aug_matrix', np.eye(4)))
             lidar_aug_matrix.append(
                 meta[self.img_key].get('lidar_aug_matrix', np.eye(4)))
