@@ -44,27 +44,6 @@ def get_camera_intrinsics(img_height, img_width, view_fov):
     calibration[1, 1] = calibration[0, 0]
     return calibration
 
-def left_coord_to_right_coord(matrix):
-    # ^ z                               ^ z
-    # |                                 |
-    # |              to:                |
-    # | . x                             |  . x
-    # |/                                | /
-    # +-------> y             y <-------+
-    # M = np.array([[ 1,  0,  0,  0 ],
-    #               [ 0, -1,  0,  0 ],
-    #               [ 0,  0,  1,  0 ],
-    #               [ 0,  0,  0,  1 ]])
-
-    R = matrix[:3, :3]
-    T = matrix[:3, 3]
-
-    M = np.eye(4)
-    M[:3, :3] = R.T
-    M[:3, 3] = T
-    M[1, 3] = -M[1, 3]
-    return M
-
 def lidar_coord_to_cam_coord(matrix):
     #           ^ z                . z
     #           |                 /
@@ -77,7 +56,6 @@ def lidar_coord_to_cam_coord(matrix):
                   [ 1,  0,  0,  0 ],
                   [ 0,  0,  0,  1 ]])
     return np.dot(M, matrix) # first transform to camera position, then to axis of camera coord
-
 
 def cam_coord_to_lidar_coord(matrix):
     #    . z                      ^ z
@@ -113,11 +91,11 @@ def parse_sensor_transform(filename):
             x = float(match[1])
             y = -float(match[2])
             z = float(match[3])
-            location = [x, y, z]  # transform to lidar coord system
+            location = [x, y, z]  # transform carla coord to lidar coord system, x, -y, z
             pitch = -float(match[4])
             yaw = -float(match[5])
             roll = float(match[6])
-            # transform to lidar coord system, roll, pitch, yaw
+            # transform carla coord to lidar coord system, roll, -pitch, -yaw
             rotation = [roll, pitch, yaw]
 
             sensor_transforms[frame_id] = {
