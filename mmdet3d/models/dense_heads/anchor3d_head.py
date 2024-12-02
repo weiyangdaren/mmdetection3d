@@ -409,18 +409,18 @@ class Anchor3DHead(Base3DDenseHead, AnchorTrainMixin):
          num_total_neg) = cls_reg_targets
 
 
-        print(batch_input_metas[0]['token'])
-        import matplotlib.pyplot as plt
-        import numpy as np
-        _labels = labels_list[0].reshape(200,200,6,2)
-        _labels = _labels.sum(-1).sum(-1).detach().cpu().numpy()
-        plt.figure('0')
-        plt.imshow(_labels)
+        # print(batch_input_metas[0]['token'])
+        # import matplotlib.pyplot as plt
+        # import numpy as np
+        # _labels = labels_list[0].reshape(200,200,6,2)
+        # _labels = _labels.sum(-1).sum(-1).detach().cpu().numpy()
+        # plt.figure('0')
+        # plt.imshow(_labels)
   
-        _cls_scores = cls_scores[0][0,...].sum(0).detach().cpu().numpy()
-        plt.figure('input')
-        plt.imshow(_cls_scores)
-        plt.show()
+        # _cls_scores = cls_scores[0][0,...].sum(0).detach().cpu().numpy()
+        # plt.figure('input')
+        # plt.imshow(_cls_scores)
+        # plt.show()
 
 
         
