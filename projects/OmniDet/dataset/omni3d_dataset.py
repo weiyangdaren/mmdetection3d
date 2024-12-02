@@ -47,7 +47,7 @@ class Omni3DDataset(Det3DDataset):
             gt_bboxes_3d = LiDARInstance3DBoxes(info['annos']['gt_boxes'], origin=(0.5, 0.5, 0.5))
             ann_info['gt_bboxes_3d'] = gt_bboxes_3d
             ann_info['gt_labels_3d'] = np.vectorize(
-                self.metainfo['categories'].get)(info['annos']['gt_names'])
+                self.metainfo['categories'].get)(info['annos']['gt_names']).astype(np.int64)
         else:
             ann_info['gt_bboxes_3d'] = LiDARInstance3DBoxes(np.zeros((0, 7), dtype=np.float32))
             ann_info['gt_labels_3d'] = np.zeros(0, dtype=np.int64)
