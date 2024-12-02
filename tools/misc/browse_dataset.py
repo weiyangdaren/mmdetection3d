@@ -135,6 +135,11 @@ def main():
             and vis_task in ['lidar_det', 'lidar_seg', 'multi-modality_det']
             and not args.not_show) else None
 
+        import copy
+        data_input['img'] = data_input['cam_nusc']
+        cam_nusc_meta = copy.deepcopy(data_sample.metainfo.pop('cam_nusc'))
+        data_sample.set_metainfo(cam_nusc_meta)
+
         visualizer.add_datasample(
             '3d visualzier',
             data_input,

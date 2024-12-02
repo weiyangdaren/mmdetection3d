@@ -71,6 +71,7 @@ class OmniLSS(Base3DDetector):
         self,
         x,
         points,
+        lidar2image,
         camera_intrinsics,
         camera2lidar,
         img_aug_matrix,
@@ -92,10 +93,13 @@ class OmniLSS(Base3DDetector):
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             bev_feat = self.view_transform(
                 img_feat,
+                points,
+                lidar2image,
                 camera_intrinsics,
                 camera2lidar,
                 img_aug_matrix,
                 lidar_aug_matrix,
+                img_metas
             )
         return img_feat, bev_feat
 
@@ -114,25 +118,28 @@ class OmniLSS(Base3DDetector):
         features = []
 
         imgs = imgs.contiguous()
-        img2lidar, camera_intrinsics = [], []
+        lidar2image, camera_intrinsics, camera2lidar = [], [], []
         img_aug_matrix, lidar_aug_matrix = [], []
         for i, meta in enumerate(batch_input_metas):
-            img2lidar.append(meta[self.img_key]['img2lidar'])
+            lidar2image.append(meta[self.img_key]['lidar2img'])
             camera_intrinsics.append(meta[self.img_key].get('cam2img', np.eye(4)))
+            camera2lidar.append(meta['cam2lidar'])
             img_aug_matrix.append(meta[self.img_key].get('img_aug_matrix', np.eye(4)))
             lidar_aug_matrix.append(
                 meta[self.img_key].get('lidar_aug_matrix', np.eye(4)))
 
-        img2lidar = imgs.new_tensor(np.asarray(img2lidar))
-        camera_intrinsics = imgs.new_tensor(np.asarray(camera_intrinsics))
+        lidar2image = imgs.new_tensor(np.asarray(lidar2image))
+        camera_intrinsics = imgs.new_tensor(np.array(camera_intrinsics))
+        camera2lidar = imgs.new_tensor(np.asarray(camera2lidar))
         img_aug_matrix = imgs.new_tensor(np.asarray(img_aug_matrix))
         lidar_aug_matrix = imgs.new_tensor(np.asarray(lidar_aug_matrix))
 
         img_feat, bev_feat = self.extract_cam_feat(
             imgs, 
             points, 
+            lidar2image,
             camera_intrinsics, 
-            img2lidar, 
+            camera2lidar, 
             img_aug_matrix, 
             lidar_aug_matrix, 
             batch_input_metas)

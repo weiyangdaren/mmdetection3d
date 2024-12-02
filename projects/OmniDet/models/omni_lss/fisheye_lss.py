@@ -147,10 +147,13 @@ class BaseViewTransform(nn.Module):
     def forward(
         self,
         img,
+        points,
+        lidar2image,
         camera_intrinsics,
         camera2lidar,
         img_aug_matrix,
         lidar_aug_matrix,
+        metas,
         **kwargs,
     ):
         intrins = camera_intrinsics[..., :3, :3]
