@@ -30,9 +30,12 @@ train_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type='cam_nusc',
-        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+        load_cam_names=[
+                        # 'nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        # 'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        # 'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
+                        'nu_rgb_camera_rear'
+                        ]),
 
     dict(
         type='LoadOmni3DPointsFromFile',
@@ -50,9 +53,9 @@ train_pipeline = [
         final_dim=[400, 800],
         resize_lim=[0.625, 0.625],
         bot_pct_lim=[0.0, 0.0],
-        rot_lim=[-5.4, 5.4],
-        rand_flip=True,
-        is_train=True,
+        rot_lim=[0, 0],
+        rand_flip=False,
+        is_train=False,
         img_key='cam_nusc',),
     dict(
         type='ObjectRangeFilter',
@@ -62,7 +65,6 @@ train_pipeline = [
         keys=['points', 'cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
             'cam2img', 'cam2lidar', 'lidar2img', 'img_aug_matrix', 'box_type_3d', 'token'],
-        input_point_keys=[],
         input_img_keys=['cam_nusc'],)
 ]
 
@@ -74,8 +76,9 @@ test_pipeline = [
         backend_args=backend_args,
         load_cam_type='cam_nusc',
         load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+                        # 'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        # 'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
+                        ]),
     # dict(
     #     type='LoadOmni3DPointsFromFile',
     #     coord_type='LIDAR',
@@ -98,7 +101,6 @@ test_pipeline = [
         meta_keys=[
             'cam2img', 'cam2lidar', 'img_aug_matrix', 'box_type_3d', 'lidar2img',
             'sample_idx', 'token', 'img_path', 'lidar_path', 'num_pts_feats'],
-        input_point_keys=['lidar_points'],
         input_img_keys=['cam_nusc'],)
 ]
 
@@ -107,7 +109,7 @@ model = dict(
     type='OmniLSS',
     extra_config=dict(
         img_key='cam_nusc',
-        lidar_key='lidar_points',
+        lidar_key='points',
         depth_supervision=False,),
     data_preprocessor=dict(
         type='OmniDet3DDataPreprocessor',
@@ -133,7 +135,7 @@ model = dict(
         out_channels=256,
         num_outs=3),
     view_transform=dict(
-        type='LSSTransform',
+        type='DepthLSSTransform',
         in_channels=256,
         out_channels=96,
         image_size=[400, 800],
@@ -233,9 +235,9 @@ model = dict(
 )
 
 train_dataloader = dict(
-    batch_size=4,
-    num_workers=16,
-    sampler=dict(type='DefaultSampler', shuffle=True),
+    batch_size=1,
+    num_workers=4,
+    sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,

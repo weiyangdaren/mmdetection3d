@@ -144,7 +144,12 @@ class OmniLSS(Base3DDetector):
             img_aug_matrix, 
             lidar_aug_matrix, 
             batch_input_metas)
- 
+        
+        # debug visualization
+        import matplotlib.pyplot as plt
+        plt.figure('bev')
+        plt.imshow(bev_feat[0].sum(0).detach().cpu().numpy())
+
         bev_feat = self.pts_backbone(bev_feat)
         bev_feat = self.pts_neck(bev_feat)
         return img_feat, bev_feat
@@ -181,10 +186,6 @@ class OmniLSS(Base3DDetector):
 
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         img_feat, bev_feat = self.extract_feat(batch_inputs_dict, batch_input_metas)
-
-        # import matplotlib.pyplot as plt
-        # plt.imshow(bev_feat[0][0, 0].detach().cpu().numpy())
-        # plt.show()
 
         losses = dict()
         if self.with_bbox_head:

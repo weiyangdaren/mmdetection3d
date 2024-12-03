@@ -819,6 +819,19 @@ class TransFusionHead(nn.Module):
         preds_dict = preds_dicts[0][0]
         loss_dict = dict()
 
+        # debug visualization
+        import matplotlib.pyplot as plt
+        hp = preds_dict['dense_heatmap'].clone()
+        _pred = clip_sigmoid(hp).float()
+        _pred = _pred[0][0].detach().cpu().numpy()  # batch 1, car
+        _gt = heatmap[0][0].detach().cpu().numpy()
+        plt.figure('pred')
+        plt.imshow(_pred)
+        plt.figure('gt')
+        plt.imshow(_gt)
+        plt.show()
+
+
         # compute heatmap loss
         loss_heatmap = self.loss_heatmap(
             clip_sigmoid(preds_dict['dense_heatmap']).float(),
