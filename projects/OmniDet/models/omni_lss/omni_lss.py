@@ -72,6 +72,7 @@ class OmniLSS(Base3DDetector):
         self,
         x,
         points,
+        lidar2camera,
         lidar2image,
         camera_intrinsics,
         camera2lidar,
@@ -91,10 +92,17 @@ class OmniLSS(Base3DDetector):
         BN, C, H, W = x.size()
         img_feat = x.view(B, int(BN / B), C, H, W)
 
+        # debug visualization
+        # import matplotlib.pyplot as plt
+        # for i in range(N):
+        #     plt.figure(f'img_{i}')
+        #     plt.imshow(img_feat[0, i].sum(0).detach().cpu().numpy(), cmap='jet')
+
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             bev_feat = self.view_transform(
                 img_feat,
                 points,
+                lidar2camera,
                 lidar2image,
                 camera_intrinsics,
                 camera2lidar,
@@ -119,9 +127,10 @@ class OmniLSS(Base3DDetector):
         features = []
 
         imgs = imgs.contiguous()
-        lidar2image, camera_intrinsics, camera2lidar = [], [], []
+        lidar2camera, lidar2image, camera_intrinsics, camera2lidar = [], [], [], []
         img_aug_matrix, lidar_aug_matrix = [], []
         for i, meta in enumerate(batch_input_metas):
+            lidar2camera.append(meta[self.img_key]['lidar2cam'])
             lidar2image.append(meta[self.img_key]['lidar2img'])
             camera_intrinsics.append(meta[self.img_key]['cam2img'])
             camera2lidar.append(meta[self.img_key]['cam2lidar'])
@@ -129,6 +138,7 @@ class OmniLSS(Base3DDetector):
             lidar_aug_matrix.append(
                 meta[self.img_key].get('lidar_aug_matrix', np.eye(4)))
 
+        lidar2camera = imgs.new_tensor(np.asarray(lidar2camera))
         lidar2image = imgs.new_tensor(np.asarray(lidar2image))
         camera_intrinsics = imgs.new_tensor(np.array(camera_intrinsics))
         camera2lidar = imgs.new_tensor(np.asarray(camera2lidar))
@@ -138,6 +148,7 @@ class OmniLSS(Base3DDetector):
         img_feat, bev_feat = self.extract_cam_feat(
             imgs, 
             points, 
+            lidar2camera,
             lidar2image,
             camera_intrinsics, 
             camera2lidar, 
@@ -146,9 +157,11 @@ class OmniLSS(Base3DDetector):
             batch_input_metas)
         
         # debug visualization
-        import matplotlib.pyplot as plt
-        plt.figure('bev')
-        plt.imshow(bev_feat[0].sum(0).detach().cpu().numpy())
+        # import matplotlib.pyplot as plt
+        # plt.figure('bev')
+        # _bev = bev_feat[0].sum(0)
+        # _bev = torch.clamp(_bev, 0, 1)
+        # plt.imshow(_bev.detach().cpu().numpy(), cmap='jet')
 
         bev_feat = self.pts_backbone(bev_feat)
         bev_feat = self.pts_neck(bev_feat)

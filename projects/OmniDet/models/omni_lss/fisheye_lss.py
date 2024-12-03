@@ -5,7 +5,7 @@ from torch import nn
 
 from mmdet3d.registry import MODELS
 from .ops import bev_pool
-from ...utils import draw_scenes_v2
+
 
 
 def gen_dx_bx(xbound, ybound, zbound):
@@ -15,6 +15,7 @@ def gen_dx_bx(xbound, ybound, zbound):
     nx = torch.LongTensor([int((row[1] - row[0]) / row[2])
                            for row in [xbound, ybound, zbound]])
     return dx, bx, nx
+
 
 class BaseViewTransform(nn.Module):
     def __init__(
@@ -68,7 +69,7 @@ class BaseViewTransform(nn.Module):
 
         frustum = torch.stack((xs, ys, ds), -1)
         return nn.Parameter(frustum, requires_grad=False)
-    
+
     def get_geometry(
         self,
         camera2lidar_rots,
@@ -141,7 +142,8 @@ class BaseViewTransform(nn.Module):
         x = x[kept]
         geom_feats = geom_feats[kept]
 
-        x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1], mean_pool=True)
+        x = bev_pool(x, geom_feats, B,
+                     self.nx[2], self.nx[0], self.nx[1], mean_pool=True)
 
         # collapse Z
         final = torch.cat(x.unbind(dim=2), 1)
@@ -152,6 +154,7 @@ class BaseViewTransform(nn.Module):
         self,
         img,
         points,
+        lidar2camera,
         lidar2image,
         camera_intrinsics,
         camera2lidar,
@@ -247,19 +250,20 @@ class LSSTransform(BaseViewTransform):
         x = x.view(B, N, self.C, self.D, fH, fW)
         x = x.permute(0, 1, 3, 4, 5, 2)
         return x
-    
+
     def forward(self, *args, **kwargs):
         x = super().forward(*args, **kwargs)
         x = self.downsample(x)
         return x
-    
+
 
 class BaseDepthTransform(BaseViewTransform):
-
+    
     def forward(
         self,
         img,
         points,
+        lidar2camera,
         lidar2image,
         cam_intrinsic,
         camera2lidar,
@@ -288,12 +292,6 @@ class BaseDepthTransform(BaseViewTransform):
             cur_coords -= cur_lidar_aug_matrix[:3, 3]
             cur_coords = torch.inverse(cur_lidar_aug_matrix[:3, :3]).matmul(
                 cur_coords.transpose(1, 0))
-            
-            # debug visualization
-            points = cur_coords.transpose(1, 0).cpu().numpy()
-            draw_scenes_v2(points=points)
-
-
 
             # lidar2image
             cur_coords = cur_lidar2image[:, :3, :3].matmul(cur_coords)
@@ -334,8 +332,7 @@ class BaseDepthTransform(BaseViewTransform):
             extra_trans=extra_trans,
         )
 
-        # debug
-        x = self.get_cam_feats_debug(img, depth)
+        x = self.get_cam_feats(img, depth)
         x = self.bev_pool(geom, x)
         return x
 
@@ -416,29 +413,6 @@ class DepthLSSTransform(BaseDepthTransform):
         B, N, C, fH, fW = x.shape
 
         d = d.view(B * N, *d.shape[2:])
-        x = x.view(B * N, C, fH, fW)
-
-        d = self.dtransform(d)
-        x = torch.cat([d, x], dim=1)
-        x = self.depthnet(x)
-
-        depth = x[:, :self.D].softmax(dim=1)
-        x = depth.unsqueeze(1) * x[:, self.D:(self.D + self.C)].unsqueeze(2)
-
-        x = x.view(B, N, self.C, self.D, fH, fW)
-        x = x.permute(0, 1, 3, 4, 5, 2)
-        return x
-    
-    def get_cam_feats_debug(self, x, d):
-        B, N, C, fH, fW = x.shape
-
-        d = d.view(B * N, *d.shape[2:])
-
-        # debug visualization
-        import matplotlib.pyplot as plt
-        plt.figure('depth')
-        plt.imshow(d[0, 0].detach().cpu().numpy())
-
         x = x.view(B * N, C, fH, fW)
 
         d = self.dtransform(d)

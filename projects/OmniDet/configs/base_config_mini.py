@@ -31,10 +31,9 @@ train_pipeline = [
         backend_args=backend_args,
         load_cam_type='cam_nusc',
         load_cam_names=[
-                        # 'nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        # 'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        # 'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
-                        'nu_rgb_camera_rear'
+                        'nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
                         ]),
 
     dict(
@@ -64,7 +63,7 @@ train_pipeline = [
         type='OmniPack3DDetInputs',
         keys=['points', 'cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2img', 'img_aug_matrix', 'box_type_3d', 'token'],
+            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'img_aug_matrix', 'box_type_3d', 'token'],
         input_img_keys=['cam_nusc'],)
 ]
 
@@ -76,8 +75,8 @@ test_pipeline = [
         backend_args=backend_args,
         load_cam_type='cam_nusc',
         load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        # 'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        # 'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left'
                         ]),
     # dict(
     #     type='LoadOmni3DPointsFromFile',
@@ -135,22 +134,22 @@ model = dict(
         out_channels=256,
         num_outs=3),
     view_transform=dict(
-        type='DepthLSSTransform',
+        type='LSSTransform',
         in_channels=256,
         out_channels=96,
         image_size=[400, 800],
         feature_size=[50, 100],
         xbound=[-48.0, 48.0, 0.3],
         ybound=[-48.0, 48.0, 0.3],
-        zbound=[-10.0, 10.0, 20.0],
+        zbound=[-5.0, 5.0, 10.0],
         dbound=[0.5, 48.5, 0.5],
-        downsample=2),
+        downsample=1),
     pts_backbone=dict(
         type='SECOND',
         in_channels=96,
         out_channels=[128, 256],
         layer_nums=[5, 5],
-        layer_strides=[1, 2],
+        layer_strides=[2, 2],
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         conv_cfg=dict(type='Conv2d', bias=False)),
     pts_neck=dict(
@@ -237,7 +236,7 @@ model = dict(
 train_dataloader = dict(
     batch_size=1,
     num_workers=4,
-    sampler=dict(type='DefaultSampler', shuffle=False),
+    sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
@@ -270,7 +269,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 3e-5
+learning_rate = 0.0001
 max_epochs = 60
 param_scheduler = [
     dict(
