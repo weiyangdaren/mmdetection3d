@@ -66,9 +66,11 @@ class Omni3DMetric(BaseMetric):
         pred_annos = self.format_to_nusc_annos(results, pred_flag=True)
         gt_annos = self.format_to_nusc_annos(results, pred_flag=False)
         
+        eval_title = '\n================== Omni3D Evaluation ==================\n'
         omni3d_eval = Omni3DEval(pred_annos, gt_annos)
         metrics_summary, result, details = omni3d_eval.main()
-        print(result)
+        result = eval_title + result
+        logger.info(result)
         metric_dict = {}
         metric_dict = {
             'details': details,

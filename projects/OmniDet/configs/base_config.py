@@ -10,8 +10,8 @@ custom_imports = dict(
 
 dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
-# classes = ('Pedestrian', 'Cyclist', 'Car')
-detect_range = [-48, -48, -3, 48, 48, 1]
+classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
+detect_range = [-48, -48, -5, 48, 48, 5]
 
 backend_args = None
 
@@ -61,8 +61,7 @@ train_pipeline = [
         type='OmniPack3DDetInputs',
         keys=['cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'img2lidar', 'img_aug_matrix', 'box_type_3d'],
-        input_point_keys=[],
+            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'img_aug_matrix', 'box_type_3d'],
         input_img_keys=['cam_nusc'],)
 ]
 
@@ -76,13 +75,6 @@ test_pipeline = [
         load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
                         'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
                         'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
-    # dict(
-    #     type='LoadOmni3DPointsFromFile',
-    #     coord_type='LIDAR',
-    #     load_dim=4,
-    #     use_dim=3,
-    #     backend_args=backend_args,
-    #     load_point_type='lidar'),
     dict(
         type='ImageAug3D',
         final_dim=[400, 800],
@@ -96,9 +88,9 @@ test_pipeline = [
         type='OmniPack3DDetInputs',
         keys=['cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'img2lidar', 'img_aug_matrix', 'box_type_3d', 
-            'sample_idx', 'token', 'img_path', 'lidar_path', 'num_pts_feats'],
-        input_point_keys=['lidar_points'],
+            'cam2img', 'cam2lidar', 'lidar2img', 'lidar2cam',
+            'sample_idx', 'token', 'img_path', 'lidar_path', 
+            'num_pts_feats', 'img_aug_matrix', 'box_type_3d',],
         input_img_keys=['cam_nusc'],)
 ]
 
@@ -140,126 +132,102 @@ model = dict(
         feature_size=[50, 100],
         xbound=[-48.0, 48.0, 0.3],
         ybound=[-48.0, 48.0, 0.3],
-        zbound=[-10.0, 10.0, 20.0],
+        zbound=[-5.0, 5.0, 10.0],
         dbound=[0.5, 48.5, 0.5],
-        downsample=2),
+        downsample=1),
     pts_backbone=dict(
         type='SECOND',
         in_channels=96,
         out_channels=[128, 256],
         layer_nums=[5, 5],
-        layer_strides=[1, 2],
+        layer_strides=[2, 2],
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         conv_cfg=dict(type='Conv2d', bias=False)),
     pts_neck=dict(
         type='SECONDFPN',
         in_channels=[128, 256],
-        out_channels=[128, 128],
+        out_channels=[256, 256],
         upsample_strides=[1, 2],
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         upsample_cfg=dict(type='deconv', bias=False),
         use_conv_for_no_stride=True),
     bbox_head=dict(
-        type='Anchor3DHead',
+        type='TransFusionHead',
+        num_proposals=200,
+        auxiliary=True,
+        in_channels=512,
+        hidden_channel=128,
         num_classes=6,
-        in_channels=256,
-        feat_channels=256,
-        use_direction_classifier=True,
-        assign_per_class=True,
-        anchor_generator=dict(
-            type='AlignedAnchor3DRangeGenerator',
-            ranges=[
-                [-48, -48, -0.6, 48, 48, -0.6],
-                [-48, -48, -0.6, 48, 48, -0.6],
-                [-48, -48, -0.6, 48, 48, -0.6],
-                [-48, -48, -0.6, 48, 48, -0.6],
-                [-48, -48, -0.6, 48, 48, -0.6],
-                [-48, -48, -0.6, 48, 48, -0.6],
-            ],
-            sizes=[[4.50, 1.95, 1.58],
-                   [5.37, 2.06, 2.26],
-                   [6.95, 2.71, 2.97],
-                   [10.27, 3.94, 4.25],
-                   [0.38, 0.38, 1.78],
-                   [1.95, 0.78, 1.60]],
-            rotations=[0, 1.57],
-            reshape_out=False),
-        diff_rad_by_sin=True,
-        bbox_coder=dict(type='DeltaXYZWLHRBBoxCoder'),
+        nms_kernel_size=3,
+        bn_momentum=0.1,
+        num_decoder_layers=1,
+        decoder_layer=dict(
+            type='TransFusionTransformerDecoderLayer',
+            self_attn_cfg=dict(embed_dims=128, num_heads=8, dropout=0.1),
+            cross_attn_cfg=dict(embed_dims=128, num_heads=8, dropout=0.1),
+            ffn_cfg=dict(
+                embed_dims=128,
+                feedforward_channels=256,
+                num_fcs=2,
+                ffn_drop=0.1,
+                act_cfg=dict(type='ReLU', inplace=True),
+            ),
+            norm_cfg=dict(type='LN'),
+            pos_encoding_cfg=dict(input_channel=2, num_pos_feats=128)),
+        train_cfg=dict(
+            dataset='Omni3D',
+            point_cloud_range=detect_range,
+            grid_size=[1280, 1280, 40],
+            voxel_size=[0.075, 0.075, 0.2],
+            out_size_factor=8,
+            gaussian_overlap=0.1,
+            min_radius=2,
+            pos_weight=-1,
+            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            assigner=dict(
+                type='HungarianAssigner3D',
+                iou_calculator=dict(type='BboxOverlaps3D', coordinate='lidar'),
+                cls_cost=dict(
+                    type='mmdet.FocalLossCost',
+                    gamma=2.0,
+                    alpha=0.25,
+                    weight=0.15),
+                reg_cost=dict(type='BBoxBEVL1Cost', weight=0.25),
+                iou_cost=dict(type='IoU3DCost', weight=0.25))),
+        test_cfg=dict(
+            dataset='Omni3D',
+            grid_size=[1280, 1280, 40],
+            out_size_factor=8,
+            voxel_size=[0.075, 0.075],
+            pc_range=[-48.0, -48.0],
+            nms_type=None),
+        common_heads=dict(
+            center=[2, 2], height=[1, 2], dim=[3, 2], rot=[2, 2]),
+        bbox_coder=dict(
+            type='TransFusionBBoxCoder',
+            pc_range=[-48.0, -48.0],
+            post_center_range=[-50, -50, -5.0, 50, 50, 5.0],
+            score_threshold=0.0,
+            out_size_factor=8,
+            voxel_size=[0.075, 0.075],
+            code_size=8),
         loss_cls=dict(
             type='mmdet.FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
+            reduction='mean',
             loss_weight=1.0),
+        loss_heatmap=dict(
+            type='mmdet.GaussianFocalLoss', reduction='mean', loss_weight=1.0),
         loss_bbox=dict(
-            type='mmdet.SmoothL1Loss', beta=1.0 / 9.0, loss_weight=2.0),
-        loss_dir=dict(
-            type='mmdet.CrossEntropyLoss', use_sigmoid=False,
-            loss_weight=0.2),
-        # model training and testing settings
-        train_cfg=dict(
-            assigner=[
-                dict(  # for Car
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.6,
-                    neg_iou_thr=0.45,
-                    min_pos_iou=0.45,
-                    ignore_iof_thr=-1),
-                dict(  # for Van
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.6,
-                    neg_iou_thr=0.45,
-                    min_pos_iou=0.45,
-                    ignore_iof_thr=-1),
-                dict(  # for Truck
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.6,
-                    neg_iou_thr=0.45,
-                    min_pos_iou=0.45,
-                    ignore_iof_thr=-1),
-                dict(  # for Bus
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.6,
-                    neg_iou_thr=0.45,
-                    min_pos_iou=0.45,
-                    ignore_iof_thr=-1),
-                dict(  # for Pedestrian
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.35,
-                    neg_iou_thr=0.25,
-                    min_pos_iou=0.25,
-                    ignore_iof_thr=-1),
-                dict(  # for Cyclist
-                    type='Max3DIoUAssigner',
-                    iou_calculator=dict(type='mmdet3d.BboxOverlapsNearest3D'),
-                    pos_iou_thr=0.5,
-                    neg_iou_thr=0.35,
-                    min_pos_iou=0.35,
-                    ignore_iof_thr=-1),
-            ],
-            allowed_border=0,
-            code_weight=[1.0, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0],
-            pos_weight=-1,
-            debug=False),
-        test_cfg=dict(
-            use_rotate_nms=True,
-            nms_across_levels=False,
-            nms_thr=0.01,
-            score_thr=0.1,
-            min_bbox_size=0,
-            nms_pre=100,
-            max_num=50)),
+            type='mmdet.L1Loss', reduction='mean', loss_weight=0.25))
 )
 
 train_dataloader = dict(
     batch_size=8,
     num_workers=16,
+    sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
         dataset=dict(
@@ -268,21 +236,22 @@ train_dataloader = dict(
             ann_file='ImageSets-2hz-all/omni3d_infos_train.pkl',
             pipeline=train_pipeline,
             test_mode=False,
-            # metainfo=dict(classes=classes),
+            metainfo=dict(classes=classes),
         )
     )
 )
 
 val_dataloader = dict(
-    batch_size=1,
-    num_workers=4,
+    batch_size=8,
+    num_workers=16,
+    sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='ImageSets-2hz-all/omni3d_infos_val.pkl',
         pipeline=test_pipeline,
         test_mode=True,
-        # metainfo=dict(classes=classes),
+        metainfo=dict(classes=classes),
     )
 )
 test_dataloader = val_dataloader
@@ -294,7 +263,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00003
+learning_rate = 0.00005
 max_epochs = 20
 param_scheduler = [
     dict(

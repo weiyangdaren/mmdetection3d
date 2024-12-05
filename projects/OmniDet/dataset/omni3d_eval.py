@@ -177,10 +177,9 @@ class Omni3DEval:
         metrics, metric_data_list = self.evaluate()
         metrics_summary = metrics.serialize()
 
-        result = '\n'
         details = {}
         # Print high-level metrics.
-        result += '{:<12s} {:<6.4f}\n'.format('mAP:', metrics_summary['mean_ap'])
+        result = '{:<12s} {:<6.4f}\n'.format('mAP:', metrics_summary['mean_ap'])
         details['mAP'] = metrics_summary['mean_ap']
         err_name_mapping = {
             'trans_err': 'mATE',

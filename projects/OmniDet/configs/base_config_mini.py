@@ -54,7 +54,7 @@ train_pipeline = [
         bot_pct_lim=[0.0, 0.0],
         rot_lim=[0, 0],
         rand_flip=False,
-        is_train=False,
+        is_train=True,
         img_key='cam_nusc',),
     dict(
         type='ObjectRangeFilter',
@@ -98,7 +98,7 @@ test_pipeline = [
         type='OmniPack3DDetInputs',
         keys=['cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'img_aug_matrix', 'box_type_3d', 'lidar2img',
+            'cam2img', 'cam2lidar', 'img_aug_matrix', 'box_type_3d', 'lidar2img', 'lidar2cam',
             'sample_idx', 'token', 'img_path', 'lidar_path', 'num_pts_feats'],
         input_img_keys=['cam_nusc'],)
 ]
@@ -205,7 +205,7 @@ model = dict(
                 iou_cost=dict(type='IoU3DCost', weight=0.25))),
         test_cfg=dict(
             dataset='Omni3D',
-            grid_size=[1280, 1280, 41],
+            grid_size=[1280, 1280, 40],
             out_size_factor=8,
             voxel_size=[0.075, 0.075],
             pc_range=[-48.0, -48.0],
@@ -215,7 +215,7 @@ model = dict(
         bbox_coder=dict(
             type='TransFusionBBoxCoder',
             pc_range=[-48.0, -48.0],
-            post_center_range=[-50, -50, -10.0, 50, 50, 5.0],
+            post_center_range=[-50, -50, -5.0, 50, 50, 5.0],
             score_threshold=0.0,
             out_size_factor=8,
             voxel_size=[0.075, 0.075],
@@ -234,8 +234,8 @@ model = dict(
 )
 
 train_dataloader = dict(
-    batch_size=1,
-    num_workers=4,
+    batch_size=4,
+    num_workers=16,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type=dataset_type,
@@ -289,22 +289,22 @@ param_scheduler = [
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95
     # during the next 12 epochs, momentum increases from 0.85 / 0.95 to 1
-    # dict(
-    #     type='CosineAnnealingMomentum',
-    #     T_max=0.4*max_epochs,
-    #     eta_min=0.85 / 0.95,
-    #     begin=0,
-    #     end=0.4*max_epochs,
-    #     by_epoch=True,
-    #     convert_to_iter_based=True),
-    # dict(
-    #     type='CosineAnnealingMomentum',
-    #     T_max=max_epochs-0.4*max_epochs,
-    #     eta_min=1,
-    #     begin=0.4*max_epochs,
-    #     end=max_epochs,
-    #     by_epoch=True,
-    #     convert_to_iter_based=True)
+    dict(
+        type='CosineAnnealingMomentum',
+        T_max=0.4*max_epochs,
+        eta_min=0.85 / 0.95,
+        begin=0,
+        end=0.4*max_epochs,
+        by_epoch=True,
+        convert_to_iter_based=True),
+    dict(
+        type='CosineAnnealingMomentum',
+        T_max=max_epochs-0.4*max_epochs,
+        eta_min=1,
+        begin=0.4*max_epochs,
+        end=max_epochs,
+        by_epoch=True,
+        convert_to_iter_based=True)
 ]
 optim_wrapper = dict(
     type='OptimWrapper',

@@ -52,6 +52,11 @@ class Omni3DDataset(Det3DDataset):
             ann_info['gt_bboxes_3d'] = LiDARInstance3DBoxes(np.zeros((0, 7), dtype=np.float32))
             ann_info['gt_labels_3d'] = np.zeros(0, dtype=np.int64)
         info.pop('annos')
+
+        for label in ann_info['gt_labels_3d']:
+            if label != -1:
+                self.num_ins_per_cat[label] += 1
+
         return ann_info
 
     def parse_data_info(self, info: dict) -> Union[List[dict], dict]:

@@ -124,8 +124,6 @@ class OmniLSS(Base3DDetector):
         assert imgs is not None, 'Image data is required.'
         assert not (self.depth_supervision and points is None), 'Lidar data is required for depth supervision.'
 
-        features = []
-
         imgs = imgs.contiguous()
         lidar2camera, lidar2image, camera_intrinsics, camera2lidar = [], [], [], []
         img_aug_matrix, lidar_aug_matrix = [], []

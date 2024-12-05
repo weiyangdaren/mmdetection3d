@@ -9,7 +9,7 @@ from .ops import bev_pool
 from ...utils import draw_scenes_v2
 
 
-
+@MODELS.register_module()
 class DepthLSSTransformDebug(BaseDepthTransform):
     def __init__(
         self,
