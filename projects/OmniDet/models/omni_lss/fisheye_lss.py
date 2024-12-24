@@ -1,11 +1,12 @@
 from typing import Tuple
 
+import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from mmdet3d.registry import MODELS
 from .ops import bev_pool
-
 
 
 def gen_dx_bx(xbound, ybound, zbound):
@@ -258,7 +259,7 @@ class LSSTransform(BaseViewTransform):
 
 
 class BaseDepthTransform(BaseViewTransform):
-    
+
     def forward(
         self,
         img,
@@ -441,6 +442,7 @@ class FisheyeLSSTransform(BaseViewTransform):
         out_channels: int,
         image_size: Tuple[int, int],
         feature_size: Tuple[int, int],
+        elevation_range: Tuple[float, float],
         xbound: Tuple[float, float, float],
         ybound: Tuple[float, float, float],
         zbound: Tuple[float, float, float],
@@ -449,6 +451,9 @@ class FisheyeLSSTransform(BaseViewTransform):
         ocam_path: str = 'data/CarlaCollection/calib_results.txt',
         ocam_fov: float = 220,
     ) -> None:
+
+        self.elevation_range = elevation_range
+
         super().__init__(
             in_channels=in_channels,
             out_channels=out_channels,
@@ -462,3 +467,152 @@ class FisheyeLSSTransform(BaseViewTransform):
 
         from ocamcamera import OcamCamera
         self.omni_ocam = OcamCamera(filename=ocam_path, fov=ocam_fov)
+        self.sphere_grid_3d = self.get_sphere_grid()  # [D, H, W, 3]
+        self.register_buffer('valid_fov_mask', self.get_valid_mask())
+
+        self.proj_x = nn.Conv2d(in_channels, self.C, 1)
+        if downsample > 1:
+            assert downsample == 2, "only support downsample=2"
+            self.downsample = nn.Sequential(
+                nn.Conv2d(
+                    out_channels, out_channels, 3, padding=1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(True),
+                nn.Conv2d(
+                    out_channels,
+                    out_channels,
+                    3,
+                    stride=downsample,
+                    padding=1,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(True),
+                nn.Conv2d(
+                    out_channels, out_channels, 3, padding=1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(True),
+            )
+        else:
+            self.downsample = nn.Identity()
+
+    def create_frustum(self):
+        fH, fW = self.feature_size
+        ds = torch.arange(
+            *self.dbound, dtype=torch.float).view(-1, 1, 1).expand(-1, fH, fW)
+
+        D, _, _ = ds.shape
+        # azimuths 方位角（水平角度）和 elevations 仰角（垂直角度）
+        min_phi, max_phi = self.elevation_range
+        azimuths = torch.linspace(-torch.pi, torch.pi, fW,
+                                  dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
+        elevations = torch.linspace(min_phi, max_phi, fH,
+                                    dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)
+
+        xs = ds * torch.cos(elevations) * torch.sin(azimuths)
+        ys = ds * torch.sin(elevations)
+        zs = ds * torch.cos(elevations) * torch.cos(azimuths)
+        frustum = torch.stack((xs, ys, zs), -1)
+
+        return nn.Parameter(frustum, requires_grad=False)
+
+    def get_sphere_grid(self):
+        proj_pts = self.frustum.cpu().numpy()
+        sphere_grid = []
+        for d in range(proj_pts.shape[0]):
+            mapx, mapy = self.omni_ocam.world2cam(
+                proj_pts[d, ...].reshape(-1, 3).T)
+            mapx, mapy = mapx.reshape(
+                self.feature_size), mapy.reshape(self.feature_size)
+            mapx, mapy = mapx * 2 / self.omni_ocam.width - \
+                1, mapy * 2 / self.omni_ocam.height - 1
+            grid = torch.from_numpy(np.stack([mapx, mapy], axis=-1))
+            sphere_grid.append(grid)
+        sphere_grid = torch.stack(sphere_grid, dim=0)
+        depth_coords = torch.zeros(
+            size=(self.D, self.feature_size[0], self.feature_size[1], 1))
+        sphere_grid = torch.cat(
+            (sphere_grid, depth_coords), dim=-1)  # [D, H, W, 3]
+        return nn.Parameter(sphere_grid, requires_grad=False)
+
+    def get_valid_mask(self):
+        valid_fov_mask = self.omni_ocam.valid_area()
+        valid_fov_mask = torch.from_numpy(valid_fov_mask).unsqueeze(
+            0).unsqueeze(0).float() / 255.0
+        valid_fov_mask = F.grid_sample(
+            valid_fov_mask, self.sphere_grid_3d[0, :, :, :2].unsqueeze(0), align_corners=True)
+        return valid_fov_mask
+
+    def get_cam_feats(self, x):
+        B, N, C, fH, fW = x.shape
+        x = x.view(B * N, C, fH, fW)
+        x = self.proj_x(x)
+        BN, C, fH, fW = x.shape
+        x = x.view(B, N, C, fH, fW)
+
+        grid_3d = self.sphere_grid_3d.unsqueeze(0).expand(
+            B, -1, -1, -1, -1)  # B x D x omniH x omniW x 3
+
+        warped_feats = []
+        for i in range(N):
+            this_x = x[:, i, :, :, :]
+            expanded_x = this_x.unsqueeze(
+                2).expand(-1, -1, self.D, -1, -1)  # [B, C, D, H, W]
+            warped_x = F.grid_sample(
+                expanded_x, grid_3d, align_corners=True)  # B x C x D x omniH x omniW
+            valid_fov_mask = self.valid_fov_mask.unsqueeze(
+                2).expand(B, self.C, self.D, -1, -1)
+            warped_x = warped_x * valid_fov_mask
+            warped_feats.append(warped_x)
+        warped_feats = torch.stack(warped_feats, dim=1)
+        warped_feats = warped_feats.permute(
+            0, 1, 3, 4, 5, 2)  # B x N x D x H x W x C
+        return warped_feats
+
+    def get_geometry(
+        self,
+        camera2lidar_rots,
+        camera2lidar_trans,
+        **kwargs,
+    ):
+        B, N, _ = camera2lidar_trans.shape
+        points = self.frustum.unsqueeze(
+            0).unsqueeze(0)  # 1 x 1 x D x H x W x 3
+        points = torch.matmul(camera2lidar_rots.view(
+            B, N, 1, 1, 1, 3, 3), points.unsqueeze(-1)).squeeze(-1)
+        points += camera2lidar_trans.view(B, N, 1, 1, 1, 3)
+        return points
+
+    def forward(
+        self,
+        img_feat,
+        points,
+        lidar2camera,
+        lidar2image,
+        camera_intrinsics,
+        camera2lidar,
+        img_aug_matrix,
+        lidar_aug_matrix,
+        img_metas,
+        **kwargs
+    ):
+        import matplotlib.pyplot as plt
+
+        camera2lidar_rots = camera2lidar[..., :3, :3]
+        camera2lidar_trans = camera2lidar[..., :3, 3]
+        geom = self.get_geometry(camera2lidar_rots, camera2lidar_trans)
+        img_feat = self.get_cam_feats(img_feat)  # B x N x D x H x W x C
+
+        x_show = img_feat[0, 0, 0, :, :, 0].detach().cpu().numpy()
+        plt.figure('x')
+        plt.imshow(x_show)
+
+        bev_feat = self.bev_pool(geom, img_feat)
+        bev_feat = self.downsample(bev_feat)
+
+        # x_show = bev_feat[0, 0, :, :].detach().cpu().numpy()
+        # plt.figure('bev')
+        # plt.imshow(x_show)
+        # plt.show()
+
+        return bev_feat, img_feat

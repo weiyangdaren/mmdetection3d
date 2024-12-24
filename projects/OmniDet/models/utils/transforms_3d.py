@@ -1,4 +1,5 @@
 # modify from https://github.com/mit-han-lab/bevfusion
+import re
 from typing import Any, Dict
 
 import numpy as np
@@ -89,7 +90,7 @@ class ImageAug3D(BaseTransform):
         return img, rotation, translation
 
     def transform(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        imgs = data['img'] if self.img_key is None else data[self.img_key]['img']
+        imgs = data[self.img_key]['img'] if self.img_key else data['img']
         new_imgs = []
         transforms = []
         for img in imgs:
@@ -199,6 +200,125 @@ class BEVFusionGlobalRotScaleTrans(GlobalRotScaleTrans):
             'lidar_aug_matrix'] = lidar_augs @ input_dict['lidar_aug_matrix']
 
         return input_dict
+    
+
+@TRANSFORMS.register_module()
+class ResizeCropFlipImage(BaseTransform):
+    """Random resize, Crop and flip the image
+    Args:
+        size (tuple, optional): Fixed padding size.
+    """
+
+    def __init__(self, data_aug_conf=None, training=True):
+        self.data_aug_conf = data_aug_conf
+        self.training = training
+        self.img_key= data_aug_conf.get('img_key', None)
+
+    def transform(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Updated result dict.
+        """
+
+        imgs = results[self.img_key]['img'] if self.img_key else results['img']
+        cam2img = results[self.img_key]['cam2img'] if self.img_key else results['cam2img']
+        N = len(imgs)
+        new_imgs = []
+        new_cam2imgs = []
+        resize, resize_dims, crop, flip, rotate = self._sample_augmentation()
+        
+        for i in range(N):
+            img = Image.fromarray(np.uint8(imgs[i]))
+            # augmentation (resize, crop, horizontal flip, rotate)
+            # different view use different aug (BEV Det)
+            img, ida_mat = self._img_transform(
+                img,
+                resize=resize,
+                resize_dims=resize_dims,
+                crop=crop,
+                flip=flip,
+                rotate=rotate,
+            )
+            new_imgs.append(np.array(img).astype(np.float32))
+            new_cam2img = np.eye(4)
+            new_cam2img[:3, :3] = ida_mat @ cam2img[i][:3, :3]
+            new_cam2imgs.append(new_cam2img)
+        new_cam2imgs = np.array(new_cam2imgs)
+        
+        if self.img_key is None:
+            results['img'] = new_imgs
+            results['cam2img'] = new_cam2imgs
+        else:
+            results[self.img_key]['img'] = new_imgs
+            results[self.img_key]['cam2img'] = new_cam2imgs
+
+        return results
+
+    def _get_rot(self, h):
+
+        return torch.Tensor([
+            [np.cos(h), np.sin(h)],
+            [-np.sin(h), np.cos(h)],
+        ])
+
+    def _img_transform(self, img, resize, resize_dims, crop, flip, rotate):
+        ida_rot = torch.eye(2)
+        ida_tran = torch.zeros(2)
+        # adjust image
+        img = img.resize(resize_dims)
+        img = img.crop(crop)
+        if flip:
+            img = img.transpose(method=Image.FLIP_LEFT_RIGHT)
+        img = img.rotate(rotate)
+
+        # post-homography transformation
+        ida_rot *= resize
+        ida_tran -= torch.Tensor(crop[:2])
+        if flip:
+            A = torch.Tensor([[-1, 0], [0, 1]])
+            b = torch.Tensor([crop[2] - crop[0], 0])
+            ida_rot = A.matmul(ida_rot)
+            ida_tran = A.matmul(ida_tran) + b
+        A = self._get_rot(rotate / 180 * np.pi)
+        b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2
+        b = A.matmul(-b) + b
+        ida_rot = A.matmul(ida_rot)
+        ida_tran = A.matmul(ida_tran) + b
+        ida_mat = torch.eye(3)
+        ida_mat[:2, :2] = ida_rot
+        ida_mat[:2, 2] = ida_tran
+        return img, ida_mat
+
+    def _sample_augmentation(self):
+        H, W = self.data_aug_conf['H'], self.data_aug_conf['W']
+        fH, fW = self.data_aug_conf['final_dim']
+        if self.training:
+            resize = np.random.uniform(*self.data_aug_conf['resize_lim'])
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int(
+                (1 - np.random.uniform(*self.data_aug_conf['bot_pct_lim'])) *
+                newH) - fH
+            crop_w = int(np.random.uniform(0, max(0, newW - fW)))
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            if self.data_aug_conf['rand_flip'] and np.random.choice([0, 1]):
+                flip = True
+            rotate = np.random.uniform(*self.data_aug_conf['rot_lim'])
+        else:
+            resize = max(fH / H, fW / W)
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = int(
+                (1 - np.mean(self.data_aug_conf['bot_pct_lim'])) * newH) - fH
+            crop_w = int(max(0, newW - fW) / 2)
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+            flip = False
+            rotate = 0
+        return resize, resize_dims, crop, flip, rotate
 
 
 @TRANSFORMS.register_module()
@@ -293,3 +413,24 @@ class GridMask(BaseTransform):
             results[self.img_key].update(img=imgs)
 
         return results
+    
+
+@TRANSFORMS.register_module()
+class FisheyeGridMask(BaseTransform):
+    def __init__(self,
+                 ):
+        pass
+
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
+        if not self.fixed_prob:
+            self.set_prob(self.epoch, self.max_epoch)
+
+    def set_prob(self, epoch, max_epoch):
+        self.prob = self.st_prob * self.epoch / self.max_epoch
+
+    def transform(self, results):
+        pass
+
+

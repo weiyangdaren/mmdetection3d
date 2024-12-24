@@ -154,8 +154,17 @@ db_sampler = dict(
         use_dim=[0, 1, 2, 3, 4],
         backend_args=backend_args),
     backend_args=backend_args)
+# ida_aug_conf = {
+#     'resize_lim': (0.47, 0.625),
+#     'final_dim': (320, 800),
+#     'bot_pct_lim': (0.0, 0.0),
+#     'rot_lim': (0.0, 0.0),
+#     'H': 900,
+#     'W': 1600,
+#     'rand_flip': True,
+# }
 ida_aug_conf = {
-    'resize_lim': (0.47, 0.625),
+    'resize_lim': (0.5, 0.5),
     'final_dim': (320, 800),
     'bot_pct_lim': (0.0, 0.0),
     'rot_lim': (0.0, 0.0),

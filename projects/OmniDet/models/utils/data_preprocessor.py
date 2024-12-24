@@ -114,7 +114,7 @@ class OmniDet3DDataPreprocessor(Det3DDataPreprocessor):
                 batch_input_shape = tuple(imgs[0].size()[-2:])
                 for data_sample, pad_shape in zip(data_samples,
                                                   img_pad_shape[img_key]):
-                    data_sample.set_metainfo({
+                    data_sample.metainfo[img_key].update({
                         'batch_input_shape': batch_input_shape,
                         'pad_shape': pad_shape
                     })

@@ -144,3 +144,17 @@ class GridMask(nn.Module):
             x = x * mask
 
         return x.view(n, c, h, w)
+
+
+if __name__ == '__main__':
+    grid_mask = GridMask(use_h=True, use_w=True, rotate=1, offset=False,
+                         ratio=0.5, mode=1, prob=0.7)
+    x = torch.rand(2, 3, 400, 800).cuda()
+    y = grid_mask(x)
+    import matplotlib.pyplot as plt
+    plt.figure('test')
+    plt.subplot(1, 2, 1)
+    plt.imshow(x[0].permute(1, 2, 0).cpu().numpy())
+    plt.subplot(1, 2, 2)
+    plt.imshow(y[0].permute(1, 2, 0).cpu().numpy())
+    plt.show()

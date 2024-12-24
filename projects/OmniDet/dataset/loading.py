@@ -135,6 +135,7 @@ class LoadOmni3DMultiViewImageFromFiles(LoadMultiViewImageFromFiles):
             ret_dict['cam2img'] = np.stack(cam2img, axis=0)
             ret_dict['ori_cam2img'] = copy.deepcopy(ret_dict['cam2img'])
 
+
         img_bytes = [
             get(name, backend_args=self.backend_args) for name in filename
         ]

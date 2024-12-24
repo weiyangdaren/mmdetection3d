@@ -246,7 +246,7 @@ class HeuristicAssigner3D(BaseAssigner):
 
 
 @TASK_UTILS.register_module()
-class HungarianAssigner3D(BaseAssigner):
+class LSSHungarianAssigner3D(BaseAssigner):
 
     def __init__(self,
                  cls_cost=dict(type='ClassificationCost', weight=1.),

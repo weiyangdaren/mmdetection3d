@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument('--save_ext', type=str,
                         default='mini', help='save ext.')
     parser.add_argument('--split_train', type=float,
-                        default=0.8, help='Train split ratio.')
+                        default=0.7, help='Train split ratio.')
     parser.add_argument('--cross_ratio', type=float,
                         default=0, help='Train split ratio.')
     args = parser.parse_args()
@@ -59,7 +59,7 @@ def save_split(split_samples, root_dir, save_ext, frame_rate=1, split_ratio=0.8,
     for scene in split_samples.keys():
         for vehicle in split_samples[scene].keys():
             frame_id_list = sorted(split_samples[scene][vehicle])[::interval]
-            if scene not in mini_scene:
+            if 'mini' in save_ext and scene not in mini_scene:
                 continue
 
             if split_ratio != 0:

@@ -1,5 +1,7 @@
 _base_ = ['../../../configs/_base_/default_runtime.py']
 
+import math
+
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
              'projects.OmniDet.dataset',
@@ -12,57 +14,42 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 detect_range = [-48, -48, -5, 48, 48, 5]
+cam_type = 'cam_fisheye'
 
 backend_args = None
 
 train_pipeline = [
-    # dict(
-    #     type='LoadOmni3DMultiViewImageFromFiles',
-    #     to_float32=True,
-    #     color_type='color',
-    #     backend_args=backend_args,
-    #     load_cam_type='cam_fisheye',
-    #     load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-    #                     'fisheye_camera_right', 'fisheye_camera_rear']),
     dict(
         type='LoadOmni3DMultiViewImageFromFiles',
         to_float32=True,
         color_type='color',
         backend_args=backend_args,
-        load_cam_type='cam_nusc',
-        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+        load_cam_type=cam_type,
+        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
+                        'fisheye_camera_right', 'fisheye_camera_rear',
+                        ]),
+    dict(
+        type='LoadOmni3DPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=4,
+        use_dim=3,
+        backend_args=backend_args,
+        load_point_type='lidar'),
 
-    # dict(
-    #     type='LoadOmni3DPointsFromFile',
-    #     coord_type='LIDAR',
-    #     load_dim=4,
-    #     use_dim=3,
-    #     backend_args=backend_args,
-    #     load_point_type='lidar'),
     dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
-    dict(
-        type='ImageAug3D',
-        final_dim=[400, 800],
-        resize_lim=[0.625, 0.625],
-        bot_pct_lim=[0.0, 0.0],
-        rot_lim=[-5.4, 5.4],
-        rand_flip=True,
-        is_train=True,
-        img_key='cam_nusc',),
+
     dict(
         type='ObjectRangeFilter',
         point_cloud_range=detect_range),
     dict(
         type='OmniPack3DDetInputs',
-        keys=['cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
+        keys=[cam_type, 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'img_aug_matrix', 'box_type_3d'],
-        input_img_keys=['cam_nusc'],)
+            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'box_type_3d', 'token'],
+        input_img_keys=[cam_type],)
 ]
 
 test_pipeline = [
@@ -71,42 +58,29 @@ test_pipeline = [
         to_float32=True,
         color_type='color',
         backend_args=backend_args,
-        load_cam_type='cam_nusc',
-        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
-    dict(
-        type='ImageAug3D',
-        final_dim=[400, 800],
-        resize_lim=[0.625, 0.625],
-        bot_pct_lim=[0.0, 0.0],
-        rot_lim=[0.0, 0.0],
-        rand_flip=False,
-        is_train=False,
-        img_key='cam_nusc',),
+        load_cam_type=cam_type,
+        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
+                        'fisheye_camera_right', 'fisheye_camera_rear',
+                        ]),
     dict(
         type='OmniPack3DDetInputs',
-        keys=['cam_nusc', 'gt_bboxes_3d', 'gt_labels_3d'],
+        keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
             'cam2img', 'cam2lidar', 'lidar2img', 'lidar2cam',
             'sample_idx', 'token', 'img_path', 'lidar_path', 
-            'num_pts_feats', 'img_aug_matrix', 'box_type_3d',],
-        input_img_keys=['cam_nusc'],)
+            'num_pts_feats', 'box_type_3d',],
+        input_img_keys=[cam_type],)
 ]
 
 
 model = dict(
     type='OmniLSS',
-    extra_config=dict(
-        img_key='cam_nusc',
-        lidar_key='lidar_points',
-        depth_supervision=False,),
     data_preprocessor=dict(
         type='OmniDet3DDataPreprocessor',
         mean=[123.675, 116.28, 103.53],
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=False,
-        img_keys=['cam_nusc'],),
+        img_keys=[cam_type],),
     img_backbone=dict(
         type='mmdet.ResNet',
         depth=18,
@@ -125,11 +99,12 @@ model = dict(
         out_channels=256,
         num_outs=3),
     view_transform=dict(
-        type='LSSTransform',
+        type='FisheyeLSSTransform',
         in_channels=256,
         out_channels=96,
-        image_size=[400, 800],
-        feature_size=[50, 100],
+        image_size=[800, 800],
+        feature_size=[50, 200],
+        elevation_range=[-math.pi/4, math.pi/4],
         xbound=[-48.0, 48.0, 0.3],
         ybound=[-48.0, 48.0, 0.3],
         zbound=[-5.0, 5.0, 10.0],
@@ -151,6 +126,16 @@ model = dict(
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         upsample_cfg=dict(type='deconv', bias=False),
         use_conv_for_no_stride=True),
+    depth_head=dict(
+        type='OmniDepthHead',
+        dbound=[0.5, 48.5, 0.5],  # should consistent with view_transform
+        feature_size=[50, 200],  # should consistent with view_transform
+        elevation_range=[-math.pi/4, math.pi/4],  # should consistent with view_transform
+        in_channel=96,
+        layer_nums=[2, 2, 2],
+        num_filters=[64, 128, 256],
+        layer_strides=[2, 2, 2],
+        loss_depth=dict(type='mmdet.SmoothL1Loss', reduction='mean', loss_weight=0.2)),
     bbox_head=dict(
         type='TransFusionHead',
         num_proposals=200,
@@ -174,33 +159,6 @@ model = dict(
             ),
             norm_cfg=dict(type='LN'),
             pos_encoding_cfg=dict(input_channel=2, num_pos_feats=128)),
-        train_cfg=dict(
-            dataset='Omni3D',
-            point_cloud_range=detect_range,
-            grid_size=[1280, 1280, 40],
-            voxel_size=[0.075, 0.075, 0.2],
-            out_size_factor=8,
-            gaussian_overlap=0.1,
-            min_radius=2,
-            pos_weight=-1,
-            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-            assigner=dict(
-                type='HungarianAssigner3D',
-                iou_calculator=dict(type='BboxOverlaps3D', coordinate='lidar'),
-                cls_cost=dict(
-                    type='mmdet.FocalLossCost',
-                    gamma=2.0,
-                    alpha=0.25,
-                    weight=0.15),
-                reg_cost=dict(type='BBoxBEVL1Cost', weight=0.25),
-                iou_cost=dict(type='IoU3DCost', weight=0.25))),
-        test_cfg=dict(
-            dataset='Omni3D',
-            grid_size=[1280, 1280, 40],
-            out_size_factor=8,
-            voxel_size=[0.075, 0.075],
-            pc_range=[-48.0, -48.0],
-            nms_type=None),
         common_heads=dict(
             center=[2, 2], height=[1, 2], dim=[3, 2], rot=[2, 2]),
         bbox_coder=dict(
@@ -221,11 +179,46 @@ model = dict(
         loss_heatmap=dict(
             type='mmdet.GaussianFocalLoss', reduction='mean', loss_weight=1.0),
         loss_bbox=dict(
-            type='mmdet.L1Loss', reduction='mean', loss_weight=0.25))
+            type='mmdet.L1Loss', reduction='mean', loss_weight=0.25)),
+    train_cfg=dict(
+        input_key=dict(
+            img_key=cam_type,
+            lidar_key='points',),
+        pts=dict(
+            dataset='Omni3D',
+            point_cloud_range=detect_range,
+            grid_size=[1280, 1280, 40],
+            voxel_size=[0.075, 0.075, 0.2],
+            out_size_factor=8,
+            gaussian_overlap=0.1,
+            min_radius=2,
+            pos_weight=-1,
+            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            assigner=dict(
+                type='LSSHungarianAssigner3D',
+                iou_calculator=dict(type='BboxOverlaps3D', coordinate='lidar'),
+                cls_cost=dict(
+                    type='mmdet.FocalLossCost',
+                    gamma=2.0,
+                    alpha=0.25,
+                    weight=0.15),
+                reg_cost=dict(type='BBoxBEVL1Cost', weight=0.25),
+                iou_cost=dict(type='IoU3DCost', weight=0.25))),),
+    test_cfg=dict(
+        input_key=dict(
+            img_key=cam_type,
+            lidar_key='points',),
+        pts=dict(
+            dataset='Omni3D',
+            grid_size=[1280, 1280, 40],
+            out_size_factor=8,
+            voxel_size=[0.075, 0.075],
+            pc_range=[-48.0, -48.0],
+            nms_type=None),),
 )
 
 train_dataloader = dict(
-    batch_size=8,
+    batch_size=4,
     num_workers=16,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
@@ -233,7 +226,7 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-all/omni3d_infos_train.pkl',
+            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -242,13 +235,13 @@ train_dataloader = dict(
 )
 
 val_dataloader = dict(
-    batch_size=8,
+    batch_size=4,
     num_workers=16,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-all/omni3d_infos_val.pkl',
+        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),
@@ -263,8 +256,8 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00005
-max_epochs = 20
+learning_rate = 0.00004
+max_epochs = 10
 param_scheduler = [
     dict(
         type='LinearLR',

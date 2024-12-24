@@ -215,13 +215,14 @@ def create_omni3d_infos(root_path,
 if __name__ == '__main__':
     root_path = 'data/CarlaCollection'
     info_prefix = 'omni3d'
-    version = '10hz-mini'
+    version = '2hz-0.7-all'
     save_path = None
-    workers = 32
-    total_cam = {
-        'cam_nusc': ['nu_rgb_camera_front', 'nu_rgb_camera_front_left', 'nu_rgb_camera_front_right',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left', 'nu_rgb_camera_rear'],
-    }
+    workers = 64
+    total_cam = None
+    # total_cam = {
+    #     'cam_nusc': ['nu_rgb_camera_front', 'nu_rgb_camera_front_left', 'nu_rgb_camera_front_right',
+    #                     'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left', 'nu_rgb_camera_rear'],
+    # }
     create_omni3d_infos(root_path,
                         info_prefix=info_prefix,
                         version=version,

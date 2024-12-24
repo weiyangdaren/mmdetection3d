@@ -11,7 +11,7 @@ python projects/OmniDet/tools/omni_converter.py
 
 # Train
 ```bash
-python tools/train.py projects/OmniDet/configs/base_config.py
+python tools/train.py projects/OmniDet/configs/nusc_petr.py --auto-scale-lr
 python tools/train.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py
 ```
 

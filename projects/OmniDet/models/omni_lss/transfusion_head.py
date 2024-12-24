@@ -649,7 +649,7 @@ class TransFusionHead(nn.Module):
                                 idx_layer:self.num_proposals *
                                 (idx_layer + 1), ]
 
-            if self.train_cfg.assigner.type == 'HungarianAssigner3D':
+            if self.train_cfg.assigner.type == 'LSSHungarianAssigner3D':
                 assign_result = self.bbox_assigner.assign(
                     bboxes_tensor_layer,
                     gt_bboxes_tensor,

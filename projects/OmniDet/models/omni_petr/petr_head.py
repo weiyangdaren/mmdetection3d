@@ -22,46 +22,7 @@ from mmengine.model.weight_init import bias_init_with_prob
 from mmengine.structures import InstanceData
 
 from mmdet3d.registry import MODELS, TASK_UTILS
-from projects.PETR.petr.utils import normalize_bbox
-
-
-
-def visualize_frustum(points):
-    """
-    Visualize the frustum points using Open3D with unified color.
-    
-    """
-    import open3d as o3d
-    point_color = [0, 0, 1]  # Blue
-    point_size = 6
-
-    if isinstance(points, torch.Tensor):
-        points = points.cpu().numpy()
-
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-
-    points = points.reshape(-1, 3)  # Shape: (N, 3)
-    # Create Open3D point cloud
-    point_cloud = o3d.geometry.PointCloud()
-    point_cloud.points = o3d.utility.Vector3dVector(points)
-
-    # Set a uniform color for all points
-    colors = np.tile(point_color, (points.shape[0], 1))  # Shape: (N, 3)
-    point_cloud.colors = o3d.utility.Vector3dVector(colors)
-
-    # Set point size in visualization
-    opt = vis.get_render_option()
-    opt.point_size = point_size
-    vis.add_geometry(point_cloud)
-    
-    # Add axis
-    axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=2.0)
-    vis.add_geometry(axis)
-
-    vis.run()
-    vis.destroy_window()
-
+from .utils import normalize_bbox
 
 
 def pos2posemb3d(pos, num_pos_feats=128, temperature=10000):
@@ -116,6 +77,7 @@ class PETRHead(AnchorFreeHead):
     _version = 2
 
     def __init__(self,
+                 input_key,
                  num_classes,
                  in_channels,
                  num_query=100,
@@ -208,6 +170,7 @@ class PETRHead(AnchorFreeHead):
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = TASK_UTILS.build(sampler_cfg)
 
+        self.input_key = input_key
         self.num_query = num_query
         self.num_classes = num_classes
         self.in_channels = in_channels
@@ -225,6 +188,7 @@ class PETRHead(AnchorFreeHead):
         self.position_level = 0
         self.with_position = with_position
         self.with_multiview = with_multiview
+
         assert 'num_feats' in positional_encoding
         num_feats = positional_encoding['num_feats']
         assert num_feats * 2 == self.embed_dims, 'embed_dims should' \
@@ -241,7 +205,7 @@ class PETRHead(AnchorFreeHead):
             loss_bbox=loss_bbox,
             bbox_coder=bbox_coder,
             init_cfg=init_cfg)
-
+        
         self.loss_cls = MODELS.build(loss_cls)
         self.loss_bbox = MODELS.build(loss_bbox)
         self.loss_iou = MODELS.build(loss_iou)
@@ -365,8 +329,8 @@ class PETRHead(AnchorFreeHead):
 
     def position_embeding(self, img_feats, img_metas, masks=None):
         eps = 1e-5
-        pad_h, pad_w = img_metas[0]['pad_shape']  # 320, 800
-        B, N, C, H, W = img_feats[self.position_level].shape  # 1 x 6 x 256 x 20 x 50
+        pad_h, pad_w = img_metas[0][self.input_key]['pad_shape']
+        B, N, C, H, W = img_feats[self.position_level].shape
         coords_h = torch.arange(
             H, device=img_feats[0].device).float() * pad_h / H
         coords_w = torch.arange(
@@ -397,12 +361,6 @@ class PETRHead(AnchorFreeHead):
                                              ])).permute(1, 2, 3,
                                                          0)  # W, H, D, 3
         
-        # debug visualization
-        # import numpy as np
-        # coords_save = coords.clone().cpu().numpy()
-        # np.save('debug/coords0.npy', coords_save)
-
-
         coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)
         coords[..., :2] = coords[..., :2] * torch.maximum(
             coords[..., 2:3],
@@ -411,8 +369,8 @@ class PETRHead(AnchorFreeHead):
         img2lidars = []
         for img_meta in img_metas:
             img2lidar = []
-            for i in range(len(img_meta['lidar2img'])):
-                img2lidar.append(np.linalg.inv(img_meta['lidar2img'][i]))
+            for i in range(len(img_meta[self.input_key]['lidar2img'])):
+                img2lidar.append(np.linalg.inv(img_meta[self.input_key]['lidar2img'][i]))
             img2lidars.append(np.asarray(img2lidar))
         img2lidars = np.asarray(img2lidars)
         img2lidars = coords.new_tensor(img2lidars)  # (B, N, 4, 4)
@@ -420,18 +378,16 @@ class PETRHead(AnchorFreeHead):
         coords = coords.view(1, 1, W, H, D, 4, 1).repeat(B, N, 1, 1, 1, 1, 1)
         img2lidars = img2lidars.view(B, N, 1, 1, 1, 4,
                                      4).repeat(1, 1, W, H, D, 1, 1)
-        coords3d = torch.matmul(img2lidars, coords).squeeze(-1)[..., :3]  # B, N, W, H, D, 3
+        coords3d = torch.matmul(img2lidars, coords).squeeze(-1)[..., :3]
+
         coords3d[..., 0:1] = (coords3d[..., 0:1] - self.position_range[0]) / (
             self.position_range[3] - self.position_range[0])
         coords3d[..., 1:2] = (coords3d[..., 1:2] - self.position_range[1]) / (
             self.position_range[4] - self.position_range[1])
         coords3d[..., 2:3] = (coords3d[..., 2:3] - self.position_range[2]) / (
             self.position_range[5] - self.position_range[2])
-
-        # visualize_frustum(coords)
-        # debug visualization
-        # coords3d_save = coords3d.clone().cpu().numpy()
-        # np.save('debug/coords3d0.npy', coords3d_save)
+        # min_z, max_z = torch.min(coords3d[..., 2]), torch.max(coords3d[..., 2])
+        # coords3d[..., 2:3] = (coords3d[..., 2:3] - min_z) / (max_z - min_z)
 
         coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
         coords_mask = coords_mask.flatten(-2).sum(-1) > (D * 0.5)
@@ -493,11 +449,11 @@ class PETRHead(AnchorFreeHead):
 
         x = mlvl_feats[0]
         batch_size, num_cams = x.size(0), x.size(1)
-        input_img_h, input_img_w = img_metas[0]['pad_shape']
+        input_img_h, input_img_w = img_metas[0][self.input_key]['pad_shape']
         masks = x.new_ones((batch_size, num_cams, input_img_h, input_img_w))
         for img_id in range(batch_size):
             for cam_id in range(num_cams):
-                img_h, img_w = img_metas[img_id]['img_shape'][cam_id]
+                img_h, img_w = img_metas[img_id][self.input_key]['img_shape'][cam_id]
                 masks[img_id, cam_id, :img_h, :img_w] = 0
         x = self.input_proj(x.flatten(0, 1))
         x = x.view(batch_size, num_cams, *x.shape[-3:])
