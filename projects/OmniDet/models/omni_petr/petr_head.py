@@ -27,10 +27,10 @@ from .utils import normalize_bbox
 
 def pos2posemb3d(pos, num_pos_feats=128, temperature=10000):
     scale = 2 * math.pi
-    pos = pos * scale
+    pos = pos * scale  # [num_query, 3]
     dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=pos.device)
     dim_t = temperature**(2 * (dim_t // 2) / num_pos_feats)
-    pos_x = pos[..., 0, None] / dim_t
+    pos_x = pos[..., 0, None] / dim_t  # [num_query, num_pos_feats]
     pos_y = pos[..., 1, None] / dim_t
     pos_z = pos[..., 2, None] / dim_t
     pos_x = torch.stack((pos_x[..., 0::2].sin(), pos_x[..., 1::2].cos()),
@@ -39,7 +39,7 @@ def pos2posemb3d(pos, num_pos_feats=128, temperature=10000):
                         dim=-1).flatten(-2)
     pos_z = torch.stack((pos_z[..., 0::2].sin(), pos_z[..., 1::2].cos()),
                         dim=-1).flatten(-2)
-    posemb = torch.cat((pos_y, pos_x, pos_z), dim=-1)
+    posemb = torch.cat((pos_y, pos_x, pos_z), dim=-1)  # [num_query, num_pos_feats * 3]
     return posemb
 
 
@@ -454,7 +454,8 @@ class PETRHead(AnchorFreeHead):
         for img_id in range(batch_size):
             for cam_id in range(num_cams):
                 img_h, img_w = img_metas[img_id][self.input_key]['img_shape'][cam_id]
-                masks[img_id, cam_id, :img_h, :img_w] = 0
+                # img_h and img_w are raw image size, so mask should be all 0 if input image size is smaller than raw image size
+                masks[img_id, cam_id, :img_h, :img_w] = 0  
         x = self.input_proj(x.flatten(0, 1))
         x = x.view(batch_size, num_cams, *x.shape[-3:])
         # interpolate masks to have the same spatial shape with x
@@ -462,10 +463,10 @@ class PETRHead(AnchorFreeHead):
 
         if self.with_position:
             coords_position_embeding, _ = self.position_embeding(
-                mlvl_feats, img_metas, masks)
+                mlvl_feats, img_metas, masks)  # learnable, 学习了三维空间点的高维表示，将位置信息“嵌入”到某个空间中
             pos_embed = coords_position_embeding
             if self.with_multiview:
-                sin_embed = self.positional_encoding(masks)
+                sin_embed = self.positional_encoding(masks)  # encode for key, not learnable, 编码了每个像素的位置
                 sin_embed = self.adapt_pos3d(sin_embed.flatten(0, 1)).view(
                     x.size())
                 pos_embed = pos_embed + sin_embed
@@ -491,7 +492,7 @@ class PETRHead(AnchorFreeHead):
                 pos_embed = torch.cat(pos_embeds, 1)
 
         reference_points = self.reference_points.weight
-        query_embeds = self.query_embedding(pos2posemb3d(reference_points))
+        query_embeds = self.query_embedding(pos2posemb3d(reference_points))  # embed for query, [num_query, embed_dims]
         reference_points = reference_points.unsqueeze(0).repeat(
             batch_size, 1, 1)  # .sigmoid()
 
@@ -505,6 +506,7 @@ class PETRHead(AnchorFreeHead):
             assert reference.shape[-1] == 3
             outputs_class = self.cls_branches[lvl](outs_dec[lvl]).to(
                 torch.float32)
+            # cx, cy, w, l, cz, h, rot_sine, rot_cosine, vx, vy
             tmp = self.reg_branches[lvl](outs_dec[lvl]).to(torch.float32)
 
             tmp[..., 0:2] += reference[..., 0:2]

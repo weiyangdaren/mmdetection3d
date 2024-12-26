@@ -71,10 +71,10 @@ class SinePositionalEncoding3D(BaseModule):
         # For convenience of exporting to ONNX, it's required to convert
         # `masks` from bool to int.
         mask = mask.to(torch.int)
-        not_mask = 1 - mask  # logical_not
-        n_embed = not_mask.cumsum(1, dtype=torch.float32)
-        y_embed = not_mask.cumsum(2, dtype=torch.float32)
-        x_embed = not_mask.cumsum(3, dtype=torch.float32)
+        not_mask = 1 - mask  # logical_not; B x N x H x W
+        n_embed = not_mask.cumsum(1, dtype=torch.float32)  # camera
+        y_embed = not_mask.cumsum(2, dtype=torch.float32)  # height
+        x_embed = not_mask.cumsum(3, dtype=torch.float32)  # width
         if self.normalize:
             n_embed = (n_embed + self.offset) / \
                       (n_embed[:, -1:, :, :] + self.eps) * self.scale
@@ -85,7 +85,7 @@ class SinePositionalEncoding3D(BaseModule):
         dim_t = torch.arange(
             self.num_feats, dtype=torch.float32, device=mask.device)
         dim_t = self.temperature**(2 * (dim_t // 2) / self.num_feats)
-        pos_n = n_embed[:, :, :, :, None] / dim_t
+        pos_n = n_embed[:, :, :, :, None] / dim_t  # B x N x H x W x self.num_feats
         pos_x = x_embed[:, :, :, :, None] / dim_t
         pos_y = y_embed[:, :, :, :, None] / dim_t
         # use `view` instead of `flatten` for dynamically exporting to ONNX
@@ -99,7 +99,7 @@ class SinePositionalEncoding3D(BaseModule):
         pos_y = torch.stack(
             (pos_y[:, :, :, :, 0::2].sin(), pos_y[:, :, :, :, 1::2].cos()),
             dim=4).view(B, N, H, W, -1)
-        pos = torch.cat((pos_n, pos_y, pos_x), dim=4).permute(0, 1, 4, 2, 3)
+        pos = torch.cat((pos_n, pos_y, pos_x), dim=4).permute(0, 1, 4, 2, 3)  # B x N x 3*self.num_feats x H x W
         return pos
 
     def __repr__(self):

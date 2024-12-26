@@ -513,6 +513,7 @@ class PETRTransformerDecoder(TransformerLayerSequence):
         else:
             self.post_norm = None
 
+    #query, key, value, key_pos, query_pos, key_padding_mask, reg_branch
     def forward(self, query, *args, **kwargs):
         """Forward function for `TransformerDecoder`.
         Args:
@@ -531,7 +532,7 @@ class PETRTransformerDecoder(TransformerLayerSequence):
 
         intermediate = []
         for layer in self.layers:
-            query = layer(query, *args, **kwargs)
+            query = layer(query, *args, **kwargs)  # [num_query, bs, embed_dims]
             if self.return_intermediate:
                 if self.post_norm is not None:
                     intermediate.append(self.post_norm(query))
