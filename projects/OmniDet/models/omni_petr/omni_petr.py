@@ -1,4 +1,5 @@
 
+from flask.cli import F
 import torch
 import torch.nn as nn
 from mmengine.structures import InstanceData
@@ -34,6 +35,8 @@ class OmniPETR(MVXTwoStageDetector):
             self.img_key = None
             self.lidar_key = None
         
+        self.use_lidar2img = False if self.img_key == 'cam_fisheye' else True
+
         pts_bbox_head.update(input_key=self.img_key)
 
         super(OmniPETR,
@@ -130,7 +133,8 @@ class OmniPETR(MVXTwoStageDetector):
         gt_bboxes_3d = [gt.bboxes_3d for gt in batch_gt_instances_3d]
         gt_labels_3d = [gt.labels_3d for gt in batch_gt_instances_3d]
 
-        batch_img_metas = self.add_lidar2img(img, batch_img_metas)
+        if self.use_lidar2img:
+            batch_img_metas = self.add_lidar2img(img, batch_img_metas)
         img_feats = self.extract_feat(img=img, img_metas=batch_img_metas)
 
         losses = dict()
@@ -171,7 +175,9 @@ class OmniPETR(MVXTwoStageDetector):
                 raise TypeError('{} must be a list, but got {}'.format(
                     name, type(var)))
         img = [img] if img is None else img
-        batch_img_metas = self.add_lidar2img(img, batch_img_metas)
+
+        if self.use_lidar2img:
+            batch_img_metas = self.add_lidar2img(img, batch_img_metas)
 
         results_list_3d = self.simple_test(batch_img_metas, img, **kwargs)
 

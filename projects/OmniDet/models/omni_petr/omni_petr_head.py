@@ -39,12 +39,13 @@ def pos2posemb3d(pos, num_pos_feats=128, temperature=10000):
                         dim=-1).flatten(-2)
     pos_z = torch.stack((pos_z[..., 0::2].sin(), pos_z[..., 1::2].cos()),
                         dim=-1).flatten(-2)
-    posemb = torch.cat((pos_y, pos_x, pos_z), dim=-1)  # [num_query, num_pos_feats * 3]
+    # [num_query, num_pos_feats * 3]
+    posemb = torch.cat((pos_y, pos_x, pos_z), dim=-1)
     return posemb
 
 
 @MODELS.register_module()
-class PETRHead(AnchorFreeHead):
+class OmniPETRHead(AnchorFreeHead):
     """Implements the DETR transformer head. See `paper: End-to-End Object
     Detection with Transformers.
 
@@ -115,6 +116,11 @@ class PETRHead(AnchorFreeHead):
                  position_range=[-65, -65, -8.0, 65, 65, 8.0],
                  init_cfg=None,
                  normedlinear=False,
+                 ocam_path: str = 'data/CarlaCollection/calib_results.txt',
+                 ocam_fov: float = 220,
+                 feature_size: tuple = (25, 100),
+                 dbound: tuple = (0.5, 48.5, 0.5),
+                 elevation_range: tuple = (-math.pi / 4, math.pi / 4),
                  **kwargs):
         # NOTE here use `AnchorFreeHead` instead of `TransformerHead`,
         # since it brings inconvenience when the initialization of
@@ -133,7 +139,7 @@ class PETRHead(AnchorFreeHead):
         self.bg_cls_weight = 0
         self.sync_cls_avg_factor = sync_cls_avg_factor
         class_weight = loss_cls.get('class_weight', None)
-        if class_weight is not None and (self.__class__ is PETRHead):
+        if class_weight is not None and (self.__class__ is OmniPETRHead):
             assert isinstance(class_weight, float), 'Expected ' \
                 'class_weight to have type float. Found ' \
                 f'{type(class_weight)}.'
@@ -198,14 +204,14 @@ class PETRHead(AnchorFreeHead):
                                        dict(type='ReLU', inplace=True))
         self.num_pred = 6
         self.normedlinear = normedlinear
-        super(PETRHead, self).__init__(
+        super(OmniPETRHead, self).__init__(
             num_classes=num_classes,
             in_channels=in_channels,
             loss_cls=loss_cls,
             loss_bbox=loss_bbox,
             bbox_coder=bbox_coder,
             init_cfg=init_cfg)
-        
+
         self.loss_cls = MODELS.build(loss_cls)
         self.loss_bbox = MODELS.build(loss_bbox)
         self.loss_iou = MODELS.build(loss_iou)
@@ -225,6 +231,27 @@ class PETRHead(AnchorFreeHead):
             requires_grad=False)
         self.bbox_coder = TASK_UTILS.build(bbox_coder)
         self.pc_range = self.bbox_coder.pc_range
+
+        from ocamcamera import OcamCamera
+        self.ocam = OcamCamera(filename=ocam_path, fov=ocam_fov)
+        self.feature_size = feature_size
+        self.dbound = dbound
+        self.elevation_range = elevation_range
+
+        self.frustum = self.create_frustum()
+        self.D = self.frustum.shape[0]
+        self.sphere_grid_3d = self.get_sphere_grid()
+        self.register_buffer('sphere_grid_2d', self.sphere_grid_3d[0, :, :, :2])  # [H, W, 2] 
+        valid_area = self.sphere_grid_2d.new_tensor(self.ocam.valid_area() / 255)
+        valid_area = F.grid_sample(valid_area.unsqueeze(0).unsqueeze(
+            0), self.sphere_grid_2d.unsqueeze(0), align_corners=True)  # [1, 1, H, W]
+        self.register_buffer('unvalid_area', 1 - valid_area)
+
+        # debug visualization
+        # import matplotlib.pyplot as plt
+        # plt.imshow(self.unvalid_area.squeeze().cpu().numpy())
+        # plt.show()
+
         self._init_layers()
 
     def _init_layers(self):
@@ -327,16 +354,48 @@ class PETRHead(AnchorFreeHead):
             for m in self.cls_branches:
                 nn.init.constant_(m[-1].bias, bias_init)
 
-    def position_embeding(self, img_feats, img_metas, masks=None):
-        eps = 1e-5
-        pad_h, pad_w = img_metas[0][self.input_key]['pad_shape']
-        B, N, C, H, W = img_feats[self.position_level].shape
-        coords_h = torch.arange(
-            H, device=img_feats[0].device).float() * pad_h / H
-        coords_w = torch.arange(
-            W, device=img_feats[0].device).float() * pad_w / W
+    def create_frustum(self):
+        fH, fW = self.feature_size
+        ds = torch.arange(
+            *self.dbound, dtype=torch.float).view(-1, 1, 1).expand(-1, fH, fW)
 
-        if self.LID: # 深度间隔逐步增加
+        D, _, _ = ds.shape
+        # azimuths 方位角（水平角度）和 elevations 仰角（垂直角度）
+        min_phi, max_phi = self.elevation_range
+        azimuths = torch.linspace(-torch.pi, torch.pi, fW,
+                                  dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
+        elevations = torch.linspace(min_phi, max_phi, fH,
+                                    dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)
+
+        xs = ds * torch.cos(elevations) * torch.sin(azimuths)
+        ys = ds * torch.sin(elevations)
+        zs = ds * torch.cos(elevations) * torch.cos(azimuths)
+        frustum = torch.stack((xs, ys, zs), -1)
+
+        return nn.Parameter(frustum, requires_grad=False)
+
+    def get_sphere_grid(self):
+        proj_pts = self.frustum.cpu().numpy()
+        sphere_grid = []
+        for d in range(proj_pts.shape[0]):
+            mapx, mapy = self.ocam.world2cam(
+                proj_pts[d, ...].reshape(-1, 3).T)
+            mapx, mapy = mapx.reshape(
+                self.feature_size), mapy.reshape(self.feature_size)
+            mapx, mapy = mapx * 2 / self.ocam.width - \
+                1, mapy * 2 / self.ocam.height - 1
+            grid = torch.from_numpy(np.stack([mapx, mapy], axis=-1))
+            sphere_grid.append(grid)
+        sphere_grid = torch.stack(sphere_grid, dim=0)
+        depth_coords = torch.zeros(
+            size=(self.D, self.feature_size[0], self.feature_size[1], 1))
+        sphere_grid = torch.cat(
+            (sphere_grid, depth_coords), dim=-1)  # [D, H, W, 3]
+        return nn.Parameter(sphere_grid, requires_grad=False)
+
+    def position_embeding(self, img_feats, img_metas, masks=None):
+        B, N, C, H, W = img_feats[self.position_level].shape
+        if self.LID:
             index = torch.arange(
                 start=0,
                 end=self.depth_num,
@@ -346,7 +405,7 @@ class PETRHead(AnchorFreeHead):
             bin_size = (self.position_range[3] - self.depth_start) / (
                 self.depth_num * (1 + self.depth_num))
             coords_d = self.depth_start + bin_size * index * index_1
-        else:  # 深度间隔均匀分布
+        else:
             index = torch.arange(
                 start=0,
                 end=self.depth_num,
@@ -357,28 +416,36 @@ class PETRHead(AnchorFreeHead):
             coords_d = self.depth_start + bin_size * index
 
         D = coords_d.shape[0]
-        coords = torch.stack(torch.meshgrid([coords_w, coords_h, coords_d
-                                             ])).permute(1, 2, 3,
-                                                         0)  # W, H, D, 3
-        
+        coords_d = coords_d.view(D, 1, 1).expand(-1, H, W)
+        min_phi, max_phi = self.elevation_range
+        azimuths = torch.linspace(-torch.pi, torch.pi, W,
+                                  dtype=torch.float,
+                                  device=img_feats[0].device).view(1, 1, W).expand(D, H, W)
+        elevations = torch.linspace(min_phi, max_phi, H,
+                                    dtype=torch.float,
+                                    device=img_feats[0].device).view(1, H, 1).expand(D, H, W)
+
+        xs = coords_d * torch.cos(elevations) * torch.sin(azimuths)
+        ys = coords_d * torch.sin(elevations)
+        zs = coords_d * torch.cos(elevations) * torch.cos(azimuths)
+
+        # Stack and permute to get [W, H, D, 4]
+        coords = torch.stack([xs, ys, zs], dim=-1).permute(2, 1, 0, 3)
         coords = torch.cat((coords, torch.ones_like(coords[..., :1])), -1)
-        coords[..., :2] = coords[..., :2] * torch.maximum(
-            coords[..., 2:3],
-            torch.ones_like(coords[..., 2:3]) * eps)
 
-        img2lidars = []
+        cam2lidars = []
         for img_meta in img_metas:
-            img2lidar = []
-            for i in range(len(img_meta[self.input_key]['lidar2img'])):
-                img2lidar.append(np.linalg.inv(img_meta[self.input_key]['lidar2img'][i]))
-            img2lidars.append(np.asarray(img2lidar))
-        img2lidars = np.asarray(img2lidars)
-        img2lidars = coords.new_tensor(img2lidars)  # (B, N, 4, 4)
+            cam2lidars.append(img_meta[self.input_key]['cam2lidar'])
+        cam2lidars = np.asarray(cam2lidars)
+        cam2lidars = coords.new_tensor(cam2lidars)  # (B, N, 4, 4)
 
-        coords = coords.view(1, 1, W, H, D, 4, 1).repeat(B, N, 1, 1, 1, 1, 1)  # (B, N, W, H, D, 4, 1)
-        img2lidars = img2lidars.view(B, N, 1, 1, 1, 4,
+        coords = coords.view(1, 1, W, H, D, 4, 1).repeat(B, N, 1, 1, 1, 1, 1)
+        cam2lidars = cam2lidars.view(B, N, 1, 1, 1, 4,
                                      4).repeat(1, 1, W, H, D, 1, 1)
-        coords3d = torch.matmul(img2lidars, coords).squeeze(-1)[..., :3]  # (B, N, W, H, D, 3)
+        coords3d = torch.matmul(cam2lidars, coords).squeeze(-1)[..., :3]
+
+        # coords3d_numpy = coords3d.cpu().numpy()
+        # np.save('debug/coords3d_sphere.npy', coords3d_numpy)
 
         coords3d[..., 0:1] = (coords3d[..., 0:1] - self.position_range[0]) / (
             self.position_range[3] - self.position_range[0])
@@ -386,18 +453,18 @@ class PETRHead(AnchorFreeHead):
             self.position_range[4] - self.position_range[1])
         coords3d[..., 2:3] = (coords3d[..., 2:3] - self.position_range[2]) / (
             self.position_range[5] - self.position_range[2])
-        # min_z, max_z = torch.min(coords3d[..., 2]), torch.max(coords3d[..., 2])
-        # coords3d[..., 2:3] = (coords3d[..., 2:3] - min_z) / (max_z - min_z)
 
         coords_mask = (coords3d > 1.0) | (coords3d < 0.0)
         coords_mask = coords_mask.flatten(-2).sum(-1) > (D * 0.5)
-        coords_mask = masks | coords_mask.permute(0, 1, 3, 2)  # (B, N, H, W)
+        coords_mask = masks | coords_mask.permute(0, 1, 3, 2)
         coords3d = coords3d.permute(0, 1, 4, 5, 3,
                                     2).contiguous().view(B * N, -1, H, W)
-        coords3d = inverse_sigmoid(coords3d)  # (B * N, D * 3, H, W)
-        coords_position_embeding = self.position_encoder(coords3d)  # (B * N, embed_dims, H, W)
-        return coords_position_embeding.view(B, N, self.embed_dims, H,
-                                             W), coords_mask
+        coords3d = inverse_sigmoid(coords3d)
+        coords_position_embeding = self.position_encoder(coords3d)
+        coords_position_embeding = coords_position_embeding.view(
+            B, N, self.embed_dims, H, W)
+
+        return coords_position_embeding, coords_mask  # coords_mask not used in PETR
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
                               missing_keys, unexpected_keys, error_msgs):
@@ -409,7 +476,7 @@ class PETRHead(AnchorFreeHead):
 
         # Names of some parameters in has been changed.
         version = local_metadata.get('version', None)
-        if (version is None or version < 2) and self.__class__ is PETRHead:
+        if (version is None or version < 2) and self.__class__ is OmniPETRHead:
             convert_dict = {
                 '.self_attn.': '.attentions.0.',
                 # '.ffn.': '.ffns.0.',
@@ -448,24 +515,28 @@ class PETRHead(AnchorFreeHead):
 
         x = mlvl_feats[0]
         batch_size, num_cams = x.size(0), x.size(1)
-        input_img_h, input_img_w = img_metas[0][self.input_key]['pad_shape']
-        masks = x.new_ones((batch_size, num_cams, input_img_h, input_img_w))
-        for img_id in range(batch_size):
-            for cam_id in range(num_cams):
-                img_h, img_w = img_metas[img_id][self.input_key]['img_shape'][cam_id]
-                # img_h and img_w are raw image size, so mask should be all 0 if input image size is smaller than raw image size
-                masks[img_id, cam_id, :img_h, :img_w] = 0  
+
+        # undistort fisheye image to equirectangular image
+        x = x.view(batch_size * num_cams, *x.size()[2:])
+        sphere_grid_2d = self.sphere_grid_2d.unsqueeze(0).repeat(
+            batch_size * num_cams, 1, 1, 1)
+        x = F.grid_sample(x, sphere_grid_2d, align_corners=True)
+        x = x.view(batch_size, num_cams, *x.size()[1:])
+        mlvl_feats[self.position_level] = x
+
+        # valid area is set to 0, otherwise 1
+        masks = self.unvalid_area.repeat(batch_size, num_cams, 1, 1).to(torch.bool)
+        
         x = self.input_proj(x.flatten(0, 1))
         x = x.view(batch_size, num_cams, *x.shape[-3:])
-        # interpolate masks to have the same spatial shape with x
-        masks = F.interpolate(masks, size=x.shape[-2:]).to(torch.bool)
 
         if self.with_position:
             coords_position_embeding, _ = self.position_embeding(
                 mlvl_feats, img_metas, masks)  # learnable, 学习了三维空间点的高维表示，将位置信息“嵌入”到某个空间中
             pos_embed = coords_position_embeding
             if self.with_multiview:
-                sin_embed = self.positional_encoding(masks)  # encode for key, not learnable, 编码了每个像素的位置
+                # encode for key, not learnable, 编码了每个像素的位置
+                sin_embed = self.positional_encoding(masks)
                 sin_embed = self.adapt_pos3d(sin_embed.flatten(0, 1)).view(
                     x.size())
                 pos_embed = pos_embed + sin_embed
@@ -491,7 +562,8 @@ class PETRHead(AnchorFreeHead):
                 pos_embed = torch.cat(pos_embeds, 1)
 
         reference_points = self.reference_points.weight
-        query_embeds = self.query_embedding(pos2posemb3d(reference_points))  # embed for query, [num_query, embed_dims]
+        # embed for query, [num_query, embed_dims]
+        query_embeds = self.query_embedding(pos2posemb3d(reference_points))
         reference_points = reference_points.unsqueeze(0).repeat(
             batch_size, 1, 1)  # .sigmoid()
 
