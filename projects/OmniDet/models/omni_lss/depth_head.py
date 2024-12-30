@@ -4,6 +4,7 @@ from typing import Optional, Sequence, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from mmdet3d.registry import MODELS
 
@@ -83,6 +84,7 @@ class OmniDepthHead(nn.Module):
     def __init__(self,
                  dbound: Tuple[float, float, float],
                  feature_size: Tuple[int, int],
+                 padding_size: Tuple[int, int],
                  img_key: str = 'cam_fisheye',
                  elevation_range: Tuple[float, float] = (-torch.pi / 4, torch.pi / 4),
                  in_channel: int = 96,
@@ -100,11 +102,48 @@ class OmniDepthHead(nn.Module):
 
         self.img_key = img_key
         self.feature_size = feature_size
+        self.padding_size = padding_size
         self.elevation_range = elevation_range
         self.depthnet = DepthNet(
             in_channel, layer_nums, num_filters, layer_strides)
 
         self.loss_depth = MODELS.build(loss_depth)
+
+    def feature_padding(self, x):
+        # Compute the padding size for height and width
+        pad_h = self.padding_size[0] - self.feature_size[0]
+        pad_w = self.padding_size[1] - self.feature_size[1]
+        
+        if pad_h < 0 or pad_w < 0:
+            raise ValueError("Padding size must be larger than or equal to feature size.")
+        
+        # Pad in (height, width) dimension
+        pad_top = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left = pad_w // 2
+        pad_right = pad_w - pad_left
+
+        # Apply padding using F.pad (pad format: [left, right, top, bottom])
+        x_padded = F.pad(x, (pad_left, pad_right, pad_top, pad_bottom), mode='constant', value=0)
+        return x_padded
+
+    def feature_cropping(self, x):
+        # Compute the cropping size for height and width
+        pad_h = self.padding_size[0] - self.feature_size[0]
+        pad_w = self.padding_size[1] - self.feature_size[1]
+        
+        if pad_h < 0 or pad_w < 0:
+            raise ValueError("Padding size must be larger than or equal to feature size.")
+        
+        # Calculate cropping indices
+        crop_top = pad_h // 2
+        crop_bottom = self.padding_size[0] - crop_top - self.feature_size[0]
+        crop_left = pad_w // 2
+        crop_right = self.padding_size[1] - crop_left - self.feature_size[1]
+
+        # Perform cropping using slicing
+        x_cropped = x[:, :, crop_top:-crop_bottom if crop_bottom > 0 else None, crop_left:-crop_right if crop_right > 0 else None]
+        return x_cropped
     
     def equirectangular_projection(self, ori_points, lidar2cam):
         '''
@@ -201,12 +240,21 @@ class OmniDepthHead(nn.Module):
             lidar2cam.append(meta[self.img_key]['lidar2cam'])
 
         lidar2cam = img_feat.new_tensor(np.asarray(lidar2cam))
+        B, N = lidar2cam.shape[:2]
         gt_depth_maps = self.equirectangular_projection(points, lidar2cam)  # B, N, H, W
+        # gH, gW = gt_depth_maps.shape[2:]
+        # gt_depth_maps = gt_depth_maps.view(B*N, 1, gH, gW)
+        # gt_depth_maps = self.feature_padding(gt_depth_maps)
+        # gt_depth_maps = gt_depth_maps.view(B, N, self.padding_size[0], self.padding_size[1])
 
-        B, N, D, H, W, C = img_feat.shape
-        img_feat = img_feat.view(B * N, D, H, W, C).permute(0, 4, 1, 2, 3) # BN, C, D, H, W
+
+        B, N, D, pH, pW, C = img_feat.shape
+        img_feat = img_feat.view(B * N, D, pH, pW, C).permute(0, 4, 1, 2, 3) # BN, C, D, pH, pW
+        img_feat = self.feature_padding(img_feat)
         depth_prob = self.depthnet(img_feat)  # BN, D, H, W
-        pred_depth_maps = self.depth_regression(depth_prob).view(B, N, H, W)
+        pred_depth_maps = self.depth_regression(depth_prob).unsqueeze(1)
+        pred_depth_maps = self.feature_cropping(pred_depth_maps)
+        pred_depth_maps = pred_depth_maps.view(B, N, pH, pW)
 
         fov_mask = self.get_fov_mask(img_feat)
         total_loss = 0
