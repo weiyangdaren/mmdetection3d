@@ -227,7 +227,7 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
+            ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -242,7 +242,7 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
+        ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),
