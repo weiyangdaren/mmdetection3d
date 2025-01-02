@@ -250,13 +250,13 @@ class OmniDepthHead(nn.Module):
 
         B, N, D, pH, pW, C = img_feat.shape
         img_feat = img_feat.view(B * N, D, pH, pW, C).permute(0, 4, 1, 2, 3) # BN, C, D, pH, pW
+        fov_mask = self.get_fov_mask(img_feat)
         img_feat = self.feature_padding(img_feat)
         depth_prob = self.depthnet(img_feat)  # BN, D, H, W
         pred_depth_maps = self.depth_regression(depth_prob).unsqueeze(1)
         pred_depth_maps = self.feature_cropping(pred_depth_maps)
         pred_depth_maps = pred_depth_maps.view(B, N, pH, pW)
 
-        fov_mask = self.get_fov_mask(img_feat)
         total_loss = 0
         for b in range(B):
             for n in range(N):

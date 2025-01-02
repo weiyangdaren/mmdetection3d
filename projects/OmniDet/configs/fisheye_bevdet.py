@@ -126,17 +126,17 @@ model = dict(
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         upsample_cfg=dict(type='deconv', bias=False),
         use_conv_for_no_stride=True),
-    depth_head=dict(
-        type='OmniDepthHead',
-        dbound=[0.5, 48.5, 0.5],  # should consistent with view_transform
-        feature_size=[25, 100],  # should consistent with view_transform
-        padding_size=[32, 100],
-        elevation_range=[-math.pi/4, math.pi/4],  # should consistent with view_transform
-        in_channel=96,
-        layer_nums=[2, 2],
-        num_filters=[64, 128],
-        layer_strides=[2, 2],
-        loss_depth=dict(type='mmdet.SmoothL1Loss', reduction='mean', loss_weight=0.2)),
+    # depth_head=dict(
+    #     type='OmniDepthHead',
+    #     dbound=[0.5, 48.5, 0.5],  # should consistent with view_transform
+    #     feature_size=[25, 100],  # should consistent with view_transform
+    #     padding_size=[32, 100],
+    #     elevation_range=[-math.pi/4, math.pi/4],  # should consistent with view_transform
+    #     in_channel=96,
+    #     layer_nums=[2, 2],
+    #     num_filters=[64, 128],
+    #     layer_strides=[2, 2],
+    #     loss_depth=dict(type='mmdet.SmoothL1Loss', reduction='mean', loss_weight=0.2)),
     bbox_head=dict(
         type='TransFusionHead',
         num_proposals=200,

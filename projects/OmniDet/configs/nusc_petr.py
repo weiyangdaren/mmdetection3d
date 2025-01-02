@@ -184,7 +184,7 @@ model = dict(
 
 train_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
@@ -201,7 +201,7 @@ train_dataloader = dict(
 
 val_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
@@ -221,8 +221,8 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.0001
-max_epochs = 50
+learning_rate = 0.0002
+max_epochs = 40
 param_scheduler = [
     dict(
         type='LinearLR',

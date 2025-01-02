@@ -11,6 +11,9 @@ from mmengine.runner import Runner
 
 from mmdet3d.utils import replace_ceph_backend
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a 3D detector')

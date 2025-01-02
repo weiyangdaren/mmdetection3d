@@ -9,6 +9,9 @@ from mmengine.runner import Runner
 
 from mmdet3d.utils import replace_ceph_backend
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 # TODO: support fuse_conv_bn and format_only
 def parse_args():
