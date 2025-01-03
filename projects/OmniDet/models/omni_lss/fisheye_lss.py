@@ -469,28 +469,32 @@ class FisheyeLSSTransform(BaseViewTransform):
         self.omni_ocam = OcamCamera(filename=ocam_path, fov=ocam_fov)
         self.sphere_grid_3d = self.get_sphere_grid()  # [D, H, W, 3]
         self.register_buffer('valid_fov_mask', self.get_valid_mask())
-
-        self.proj_x = nn.Conv2d(in_channels, self.C, 1)
-        if downsample > 1:
-            assert downsample == 2, "only support downsample=2"
+        
+        self.down_ratio = downsample
+        self.init_layer()
+    
+    def init_layer(self):
+        self.proj_x = nn.Conv2d(self.in_channels, self.C, 1)
+        if self.down_ratio > 1:
+            assert self.down_ratio == 2, "only support downsample=2"
             self.downsample = nn.Sequential(
                 nn.Conv2d(
-                    out_channels, out_channels, 3, padding=1, bias=False),
-                nn.BatchNorm2d(out_channels),
+                    self.C, self.C, 3, padding=1, bias=False),
+                nn.BatchNorm2d(self.C),
                 nn.ReLU(True),
                 nn.Conv2d(
-                    out_channels,
-                    out_channels,
+                    self.C,
+                    self.C,
                     3,
-                    stride=downsample,
+                    stride=self.down_ratio,
                     padding=1,
                     bias=False,
                 ),
-                nn.BatchNorm2d(out_channels),
+                nn.BatchNorm2d(self.C),
                 nn.ReLU(True),
                 nn.Conv2d(
-                    out_channels, out_channels, 3, padding=1, bias=False),
-                nn.BatchNorm2d(out_channels),
+                    self.C, self.C, 3, padding=1, bias=False),
+                nn.BatchNorm2d(self.C),
                 nn.ReLU(True),
             )
         else:
@@ -603,9 +607,9 @@ class FisheyeLSSTransform(BaseViewTransform):
         geom = self.get_geometry(camera2lidar_rots, camera2lidar_trans)
         img_feat = self.get_cam_feats(img_feat)  # B x N x D x H x W x C
 
-        x_show = img_feat[0, 0, 0, :, :, 0].detach().cpu().numpy()
-        plt.figure('x')
-        plt.imshow(x_show)
+        # x_show = img_feat[0, 0, 0, :, :, 0].detach().cpu().numpy()
+        # plt.figure('x')
+        # plt.imshow(x_show)
 
         bev_feat = self.bev_pool(geom, img_feat)
         bev_feat = self.downsample(bev_feat)
@@ -615,4 +619,106 @@ class FisheyeLSSTransform(BaseViewTransform):
         # plt.imshow(x_show)
         # plt.show()
 
+        return bev_feat, img_feat
+
+
+@MODELS.register_module()
+class FisheyeLSSTransformV2(FisheyeLSSTransform):
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        image_size: Tuple[int, int],
+        feature_size: Tuple[int, int],
+        elevation_range: Tuple[float, float],
+        xbound: Tuple[float, float, float],
+        ybound: Tuple[float, float, float],
+        zbound: Tuple[float, float, float],
+        dbound: Tuple[float, float, float],
+        downsample: int = 1,
+        ocam_path: str = 'data/CarlaCollection/calib_results.txt',
+        ocam_fov: float = 220,
+    ) -> None:
+        self.elevation_range = elevation_range
+        super().__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            image_size=image_size,
+            feature_size=feature_size,
+            elevation_range=elevation_range,
+            xbound=xbound,
+            ybound=ybound,
+            zbound=zbound,
+            dbound=dbound,
+            downsample=downsample,
+            ocam_path=ocam_path,
+            ocam_fov=ocam_fov,
+        )
+
+        self.register_buffer('sphere_grid_2d', self.sphere_grid_3d[0, :, :, :2])  # [H, W, 2]
+        self.init_layer()
+    
+    def init_layer(self):
+        self.depthnet = nn.Conv2d(self.in_channels, self.D + self.C, 1)
+        if self.down_ratio > 1:
+            assert self.down_ratio == 2, "self.down_ratio should be 2"
+            self.downsample = nn.Sequential(
+                nn.Conv2d(
+                    self.C, self.C, 3, padding=1, bias=False),
+                nn.BatchNorm2d(self.C),
+                nn.ReLU(True),
+                nn.Conv2d(
+                    self.C,
+                    self.C,
+                    3,
+                    stride=self.down_ratio,
+                    padding=1,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(self.C),
+                nn.ReLU(True),
+                nn.Conv2d(
+                    self.C, self.C, 3, padding=1, bias=False),
+                nn.BatchNorm2d(self.C),
+                nn.ReLU(True),
+            )
+        else:
+            self.downsample = nn.Identity()
+    
+    def get_cam_feats(self, x):
+        B, N, C, fH, fW = x.shape
+        x = x.view(B * N, C, fH, fW)
+        warp_x = F.grid_sample(
+            x, self.sphere_grid_2d.unsqueeze(0).expand(B * N, -1, -1, -1), align_corners=True)
+        x = self.depthnet(warp_x)
+        depth = x[:, :self.D].softmax(dim=1)
+        x = depth.unsqueeze(1) * x[:, self.D:(self.D + self.C)].unsqueeze(2)
+        fH, fW = self.sphere_grid_2d.shape[:2]
+        x = x.view(B, N, self.C, self.D, fH, fW)
+        x = x.permute(0, 1, 3, 4, 5, 2)
+        return x
+    
+
+    def forward(
+        self,
+        img_feat,
+        points,
+        lidar2camera,
+        lidar2image,
+        camera_intrinsics,
+        camera2lidar,
+        img_aug_matrix,
+        lidar_aug_matrix,
+        img_metas,
+        **kwargs
+    ):
+        import matplotlib.pyplot as plt
+
+        camera2lidar_rots = camera2lidar[..., :3, :3]
+        camera2lidar_trans = camera2lidar[..., :3, 3]
+        geom = self.get_geometry(camera2lidar_rots, camera2lidar_trans)
+        img_feat = self.get_cam_feats(img_feat)  # B x N x D x H x W x C
+        bev_feat = self.bev_pool(geom, img_feat)
+        bev_feat = self.downsample(bev_feat)
         return bev_feat, img_feat
