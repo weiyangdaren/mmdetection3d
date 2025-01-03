@@ -71,10 +71,10 @@ class Omni3DMetric(BaseMetric):
         metrics_summary, result, details = omni3d_eval.main()
         result = eval_title + result
         logger.info(result)
-        metric_dict = {}
-        metric_dict = {
-            'details': details,
-        }
+        metric_dict = details
+        # metric_dict = {
+        #     'details': details,
+        # }
         return metric_dict
 
     def split_annos_by_weather(self, annos: dict) -> Tuple[dict, dict]:

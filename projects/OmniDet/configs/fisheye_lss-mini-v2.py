@@ -99,7 +99,7 @@ model = dict(
         out_channels=256,
         num_outs=2),
     view_transform=dict(
-        type='FisheyeLSSTransform',
+        type='FisheyeLSSTransformV2',
         in_channels=256,
         out_channels=96,
         image_size=[800, 800],
@@ -133,9 +133,9 @@ model = dict(
     #     padding_size=[32, 100],
     #     elevation_range=[-math.pi/4, math.pi/4],  # should consistent with view_transform
     #     in_channel=96,
-    #     layer_nums=[2, 2],
-    #     num_filters=[64, 128],
-    #     layer_strides=[2, 2],
+    #     layer_nums=[2, 2, 2],
+    #     num_filters=[64, 128, 256],
+    #     layer_strides=[2, 2, 2],
     #     loss_depth=dict(type='mmdet.SmoothL1Loss', reduction='mean', loss_weight=0.2)),
     bbox_head=dict(
         type='TransFusionHead',
@@ -220,14 +220,14 @@ model = dict(
 
 train_dataloader = dict(
     batch_size=4,
-    num_workers=4,
+    num_workers=16,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
+            ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -237,12 +237,12 @@ train_dataloader = dict(
 
 val_dataloader = dict(
     batch_size=4,
-    num_workers=4,
+    num_workers=16,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
+        ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),
@@ -257,8 +257,8 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00005
-max_epochs = 40
+learning_rate = 0.00004
+max_epochs = 10
 param_scheduler = [
     dict(
         type='LinearLR',
@@ -310,8 +310,17 @@ auto_scale_lr = dict(enable=False, base_batch_size=8)
 
 
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=100),
-    checkpoint=dict(type='CheckpointHook', interval=1),)
+    logger=dict(type='LoggerHook', interval=50),
+    checkpoint=dict(type='CheckpointHook', interval=1),
+    early_stopping=dict(
+        type='EarlyStoppingHook',
+        monitor='NDS',            
+        rule='greater',            
+        min_delta=0.003,             
+        strict=True,                
+        check_finite=True,          
+        patience=3,                       
+    ))
 
 custom_hooks = [
     dict(type='OutputHook', save_dir='output'),
