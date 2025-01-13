@@ -1,6 +1,6 @@
 _base_ = ['./nusc_petr.py']
 
-learning_rate = 0.00004
+learning_rate = 0.0002
 max_epochs = 20
 param_scheduler = [
     dict(

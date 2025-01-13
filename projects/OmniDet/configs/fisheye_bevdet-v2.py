@@ -227,7 +227,7 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
+            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -242,7 +242,7 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-mini/omni3d_infos_train.pkl',
+        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),
@@ -258,7 +258,7 @@ test_evaluator = val_evaluator
 
 
 learning_rate = 0.00005
-max_epochs = 40
+max_epochs = 10
 param_scheduler = [
     dict(
         type='LinearLR',
@@ -310,17 +310,17 @@ auto_scale_lr = dict(enable=False, base_batch_size=8)
 
 
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=50),
+    logger=dict(type='LoggerHook', interval=100),
     checkpoint=dict(type='CheckpointHook', interval=1, ),
-    early_stopping=dict(
-        type='EarlyStoppingHook',
-        monitor='NDS',            
-        rule='greater',            
-        min_delta=0.0002,             
-        strict=True,                
-        check_finite=True,          
-        patience=3,                       
-    ))
+    # early_stopping=dict(
+    #     type='EarlyStoppingHook',
+    #     monitor='NDS',            
+    #     rule='greater',            
+    #     min_delta=0.0002,             
+    #     strict=True,                
+    #     check_finite=True,          
+    #     patience=3)
+    )
 
 custom_hooks = [
     dict(type='OutputHook', save_dir='output'),

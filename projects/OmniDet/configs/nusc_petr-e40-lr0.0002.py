@@ -1,6 +1,6 @@
 _base_ = ['./nusc_petr.py']
 
-learning_rate = 0.0001
+learning_rate = 0.0002
 max_epochs = 40
 param_scheduler = [
     dict(
@@ -41,6 +41,20 @@ optim_wrapper = dict(
     type='OptimWrapper',
     optimizer=dict(type='AdamW', lr=learning_rate, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2))
+
+default_hooks = dict(
+    logger=dict(type='LoggerHook', interval=100),
+    checkpoint=dict(type='CheckpointHook', interval=1, ),
+    early_stopping=dict(
+        type='EarlyStoppingHook',
+        monitor='NDS',            
+        rule='greater',            
+        min_delta=0.0003,             
+        strict=True,                
+        check_finite=True,          
+        patience=3)
+    )
+
 
 
 train_cfg = dict(type='EpochBasedTrainLoop',

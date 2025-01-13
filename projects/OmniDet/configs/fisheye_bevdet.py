@@ -311,7 +311,16 @@ auto_scale_lr = dict(enable=False, base_batch_size=8)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=100),
-    checkpoint=dict(type='CheckpointHook', interval=1),)
+    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=5),
+    early_stopping=dict(
+        type='EarlyStoppingHook',
+        monitor='NDS',            
+        rule='greater',            
+        min_delta=0.0002,             
+        strict=True,                
+        check_finite=True,          
+        patience=3,),
+    )
 
 custom_hooks = [
     dict(type='OutputHook', save_dir='output'),
