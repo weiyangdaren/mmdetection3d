@@ -1,4 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
+_base_ = ['../default_runtime.py']
 
 import math
 
@@ -17,10 +17,10 @@ ref_range = 48
 detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type = 'cam_fisheye'
 cam_fov = 220
-xbound=[-ref_range, ref_range, 0.3],
-ybound=[-ref_range, ref_range, 0.3],
-zbound=[-5.0, 5.0, 10.0],
-dbound=[0.5, ref_range+0.5, 0.5],
+xbound=[-ref_range, ref_range, 0.3]
+ybound=[-ref_range, ref_range, 0.3]
+zbound=[-5.0, 5.0, 10.0]
+dbound=[0.5, ref_range+0.5, 0.5]
 backend_args = None
 
 train_pipeline = [

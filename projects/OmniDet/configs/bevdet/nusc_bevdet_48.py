@@ -1,4 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
+_base_ = ['../default_runtime.py']
 
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
@@ -16,10 +16,10 @@ detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type='cam_nusc'
 train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
 val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_val.pkl'
-xbound=[-ref_range, ref_range, 0.3],
-ybound=[-ref_range, ref_range, 0.3],
-zbound=[-5.0, 5.0, 10.0],
-dbound=[0.5, ref_range+0.5, 0.5],
+xbound=[-ref_range, ref_range, 0.3]
+ybound=[-ref_range, ref_range, 0.3]
+zbound=[-5.0, 5.0, 10.0]
+dbound=[0.5, ref_range+0.5, 0.5]
 
 
 backend_args = None

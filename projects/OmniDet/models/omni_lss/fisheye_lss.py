@@ -10,6 +10,7 @@ from .ops import bev_pool
 
 
 def gen_dx_bx(xbound, ybound, zbound):
+    print(xbound, ybound, zbound)
     dx = torch.Tensor([row[2] for row in [xbound, ybound, zbound]])
     bx = torch.Tensor(
         [row[0] + row[2] / 2.0 for row in [xbound, ybound, zbound]])
