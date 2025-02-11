@@ -265,7 +265,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00005
+learning_rate = 0.0001
 max_epochs = 20
 param_scheduler = [
     dict(
@@ -314,7 +314,7 @@ val_cfg = dict()
 test_cfg = dict()
 
 
-auto_scale_lr = dict(enable=False, base_batch_size=8)
+auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 
 default_hooks = dict(

@@ -292,7 +292,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00005
+learning_rate = 0.0001
 max_epochs = 20
 param_scheduler = [
     dict(
