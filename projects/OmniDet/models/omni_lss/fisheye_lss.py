@@ -184,6 +184,11 @@ class BaseViewTransform(nn.Module):
         )
 
         x = self.get_cam_feats(img)
+
+        # N = x.shape[1]
+        # for i in range(N):
+        #     x[:, i, :, :, :, :] = i + 1
+
         x = self.bev_pool(geom, x)
         return x
 
@@ -442,6 +447,7 @@ class FisheyeLSSTransform(BaseViewTransform):
         out_channels: int,
         image_size: Tuple[int, int],
         feature_size: Tuple[int, int],
+        azimuth_range: Tuple[float, float],
         elevation_range: Tuple[float, float],
         xbound: Tuple[float, float, float],
         ybound: Tuple[float, float, float],
@@ -452,6 +458,7 @@ class FisheyeLSSTransform(BaseViewTransform):
         ocam_fov: float = 220,
     ) -> None:
 
+        self.azimuth_range = azimuth_range
         self.elevation_range = elevation_range
 
         super().__init__(
@@ -468,7 +475,7 @@ class FisheyeLSSTransform(BaseViewTransform):
         from ocamcamera import OcamCamera
         self.omni_ocam = OcamCamera(filename=ocam_path, fov=ocam_fov)
         self.sphere_grid_3d = self.get_sphere_grid()  # [D, H, W, 3]
-        self.register_buffer('valid_fov_mask', self.get_valid_mask())
+        # self.register_buffer('valid_fov_mask', self.get_valid_mask())
         
         self.down_ratio = downsample
         self.init_layer()
@@ -507,8 +514,9 @@ class FisheyeLSSTransform(BaseViewTransform):
 
         D, _, _ = ds.shape
         # azimuths 方位角（水平角度）和 elevations 仰角（垂直角度）
+        min_theta, max_theta = self.azimuth_range
         min_phi, max_phi = self.elevation_range
-        azimuths = torch.linspace(-torch.pi, torch.pi, fW,
+        azimuths = torch.linspace(min_theta, max_theta, fW,
                                   dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
         elevations = torch.linspace(min_phi, max_phi, fH,
                                     dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)
@@ -564,9 +572,9 @@ class FisheyeLSSTransform(BaseViewTransform):
                 2).expand(-1, -1, self.D, -1, -1)  # [B, C, D, H, W]
             warped_x = F.grid_sample(
                 expanded_x, grid_3d, align_corners=True)  # B x C x D x omniH x omniW
-            valid_fov_mask = self.valid_fov_mask.unsqueeze(
-                2).expand(B, self.C, self.D, -1, -1)
-            warped_x = warped_x * valid_fov_mask
+            # valid_fov_mask = self.valid_fov_mask.unsqueeze(
+            #     2).expand(B, self.C, self.D, -1, -1)
+            # warped_x = warped_x * valid_fov_mask
             warped_feats.append(warped_x)
         warped_feats = torch.stack(warped_feats, dim=1)
         warped_feats = warped_feats.permute(
@@ -631,6 +639,7 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         out_channels: int,
         image_size: Tuple[int, int],
         feature_size: Tuple[int, int],
+        azimuth_range: Tuple[float, float],
         elevation_range: Tuple[float, float],
         xbound: Tuple[float, float, float],
         ybound: Tuple[float, float, float],
@@ -640,12 +649,14 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         ocam_path: str = 'data/CarlaCollection/calib_results.txt',
         ocam_fov: float = 220,
     ) -> None:
+        self.azimuth_range = azimuth_range
         self.elevation_range = elevation_range
         super().__init__(
             in_channels=in_channels,
             out_channels=out_channels,
             image_size=image_size,
             feature_size=feature_size,
+            azimuth_range=azimuth_range,
             elevation_range=elevation_range,
             xbound=xbound,
             ybound=ybound,
@@ -692,7 +703,11 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         warp_x = F.grid_sample(
             x, self.sphere_grid_2d.unsqueeze(0).expand(B * N, -1, -1, -1), align_corners=True)
         x = self.depthnet(warp_x)
+        # self.valid_fov_mask = self.valid_fov_mask.unsqueeze(0).expand(B * N, -1, -1, -1)
+        # x = x * self.valid_fov_mask
+
         depth = x[:, :self.D].softmax(dim=1)
+        
         x = depth.unsqueeze(1) * x[:, self.D:(self.D + self.C)].unsqueeze(2)
         fH, fW = self.sphere_grid_2d.shape[:2]
         x = x.view(B, N, self.C, self.D, fH, fW)
@@ -719,6 +734,38 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         camera2lidar_trans = camera2lidar[..., :3, 3]
         geom = self.get_geometry(camera2lidar_rots, camera2lidar_trans)
         img_feat = self.get_cam_feats(img_feat)  # B x N x D x H x W x C
+
+        # N = img_feat.shape[1]
+        # for i in range(N):
+        #     img_feat[:, i, :, :, :, :] = i + 1
+            
         bev_feat = self.bev_pool(geom, img_feat)
         bev_feat = self.downsample(bev_feat)
         return bev_feat, img_feat
+    
+
+if __name__ == '__main__':
+    pinhole_view_transform = LSSTransform(
+        in_channels=256,
+        out_channels=96,
+        image_size=[400, 800],
+        feature_size=[25, 50],
+        xbound=[-48.0, 48.0, 0.3],
+        ybound=[-48.0, 48.0, 0.3],
+        zbound=[-5.0, 5.0, 10.0],
+        dbound=[0.5, 48.5, 0.5],
+        downsample=1)
+
+    import math
+    fisheye_view_transform = FisheyeLSSTransformV2(
+        in_channels=256,
+        out_channels=96,
+        image_size=[800, 800],
+        feature_size=[25, 100],
+        elevation_range=[-math.pi/4, math.pi/4],
+        xbound=[-48.0, 48.0, 0.3],
+        ybound=[-48.0, 48.0, 0.3],
+        zbound=[-5.0, 5.0, 10.0],
+        dbound=[0.5, 48.5, 0.5],
+        downsample=1)
+

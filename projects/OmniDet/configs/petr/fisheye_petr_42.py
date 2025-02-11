@@ -12,11 +12,12 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 voxel_size = [0.2, 0.2, 10]
-detect_range = [-48, -48, -5, 48, 48, 5]
+ref_range = 48
+detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type='cam_fisheye'
 cam_fov = 220
-train_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
-val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
+train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
 backend_args = None
 
 train_pipeline = [
@@ -206,7 +207,7 @@ test_dataloader = val_dataloader
 # TODO
 val_evaluator = dict(
     type='Omni3DMetric',
-    ref_range=48,
+    ref_range=ref_range,
 )
 test_evaluator = val_evaluator
 
@@ -226,7 +227,7 @@ param_scheduler = [
         T_max=max_epochs,
         end=max_epochs,
         by_epoch=True,
-        eta_min_ratio=1e-4,
+        eta_min_ratio=5e-4,
         convert_to_iter_based=True),
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95

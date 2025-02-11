@@ -183,6 +183,10 @@ class OmniLSS(Base3DDetector):
             lidar_aug_matrix, 
             batch_input_metas)
         
+        # bev_feat = bev_feat.detach().cpu().numpy()
+        # bev_feat = bev_feat[0].sum(0)
+        # np.save('work_dirs/0features/n5.npy', bev_feat)
+        # exit()
         # debug visualization
         # import matplotlib.pyplot as plt
         # plt.figure('bev')

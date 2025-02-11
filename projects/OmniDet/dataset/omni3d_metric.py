@@ -38,6 +38,7 @@ class Omni3DMetric(BaseMetric):
     def __init__(self,
                  eval_weather: Optional[List[str]] = None,
                  eval_distance: Optional[List[float]] = None,
+                 ref_range: Optional[Dict[str, int]] = None,
                  prefix: Optional[str] = None,
                  collect_device: str = 'cpu',
                  backend_args: Optional[dict] = None) -> None:
@@ -45,6 +46,7 @@ class Omni3DMetric(BaseMetric):
             collect_device=collect_device, prefix=prefix)
         self.eval_weather = eval_weather
         self.eval_distance = eval_distance
+        self.ref_range = ref_range
         self.backend_args = backend_args
     
     def process(self, data_batch: dict, data_samples: Sequence[dict]) -> None:
@@ -67,7 +69,7 @@ class Omni3DMetric(BaseMetric):
         gt_annos = self.format_to_nusc_annos(results, pred_flag=False)
         
         eval_title = '\n================== Omni3D Evaluation ==================\n'
-        omni3d_eval = Omni3DEval(pred_annos, gt_annos)
+        omni3d_eval = Omni3DEval(pred_annos, gt_annos, ref_range=self.ref_range)
         metrics_summary, result, details = omni3d_eval.main()
         result = eval_title + result
         logger.info(result)

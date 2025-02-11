@@ -120,6 +120,7 @@ class OmniPETRHead(AnchorFreeHead):
                  ocam_fov: float = 220,
                  feature_size: tuple = (25, 100),
                  dbound: tuple = (0.5, 48.5, 0.5),
+                 azimuth_range: tuple = (-math.radians(220/2), math.radians(220/2)),
                  elevation_range: tuple = (-math.pi / 4, math.pi / 4),
                  **kwargs):
         # NOTE here use `AnchorFreeHead` instead of `TransformerHead`,
@@ -236,6 +237,7 @@ class OmniPETRHead(AnchorFreeHead):
         self.ocam = OcamCamera(filename=ocam_path, fov=ocam_fov)
         self.feature_size = feature_size
         self.dbound = dbound
+        self.azimuth_range = azimuth_range
         self.elevation_range = elevation_range
 
         self.frustum = self.create_frustum()
@@ -360,9 +362,10 @@ class OmniPETRHead(AnchorFreeHead):
             *self.dbound, dtype=torch.float).view(-1, 1, 1).expand(-1, fH, fW)
 
         D, _, _ = ds.shape
-        # azimuths 方位角（水平角度）和 elevations 仰角（垂直角度）
+        # azimuths 方位角（水平角度）和 elevations 仰角（垂直角度
+        min_theta, max_theta = self.azimuth_range
         min_phi, max_phi = self.elevation_range
-        azimuths = torch.linspace(-torch.pi, torch.pi, fW,
+        azimuths = torch.linspace(min_theta, max_theta, fW,
                                   dtype=torch.float).view(1, 1, fW).expand(D, fH, fW)
         elevations = torch.linspace(min_phi, max_phi, fH,
                                     dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)

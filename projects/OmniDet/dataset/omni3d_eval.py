@@ -19,6 +19,7 @@ from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
 DETECTION_NAMES = ["Car", "Van", "Truck", "Bus", "Pedestrian", "Cyclist"]
 ATTRIBUTE_NAMES = ['pedestrian.moving', 'cycle.with_rider', 'vehicle.moving']
 TP_METRICS = ['trans_err', 'scale_err', 'orient_err']
+CLASS_RANGE = {'48': 48, '42': 42, '36': 36, '30': 30}
 EVAL_CONFIG = {
     'class_range': {
         'Car': 48,
@@ -92,28 +93,36 @@ class OmniDetectionMetrics(DetectionMetrics):
             scores[metric_name] = score
         return scores
 
+
 class OmniDetectionBox(DetectionBox):
     def __init__(self,
-                sample_token: str = "",
-                translation: Tuple[float, float, float] = (0, 0, 0),
-                size: Tuple[float, float, float] = (0, 0, 0),
-                rotation: Tuple[float, float, float, float] = (0, 0, 0, 0),
-                velocity: Tuple[float, float] = (0, 0),
-                ego_translation: Tuple[float, float, float] = (0, 0, 0),  # Translation to ego vehicle in meters.
-                num_pts: int = -1,  # Nbr. LIDAR or RADAR inside the box. Only for gt boxes.
-                detection_name: str = 'car',  # The class name used in the detection challenge.
-                detection_score: float = -1.0,  # GT samples do not have a score.
-                attribute_name: str = ''):  # Box attribute. Each box can have at most 1 attribute.
+                 sample_token: str = "",
+                 translation: Tuple[float, float, float] = (0, 0, 0),
+                 size: Tuple[float, float, float] = (0, 0, 0),
+                 rotation: Tuple[float, float, float, float] = (0, 0, 0, 0),
+                 velocity: Tuple[float, float] = (0, 0),
+                 # Translation to ego vehicle in meters.
+                 ego_translation: Tuple[float, float, float] = (0, 0, 0),
+                 # Nbr. LIDAR or RADAR inside the box. Only for gt boxes.
+                 num_pts: int = -1,
+                 # The class name used in the detection challenge.
+                 detection_name: str = 'car',
+                 # GT samples do not have a score.
+                 detection_score: float = -1.0,
+                 attribute_name: str = ''):  # Box attribute. Each box can have at most 1 attribute.
 
-        super().__init__(sample_token, translation, size, rotation, velocity, ego_translation, num_pts)
+        super().__init__(sample_token, translation, size,
+                         rotation, velocity, ego_translation, num_pts)
 
         assert detection_name is not None, 'Error: detection_name cannot be empty!'
         assert detection_name in DETECTION_NAMES, 'Error: Unknown detection_name %s' % detection_name
         assert attribute_name in ATTRIBUTE_NAMES or attribute_name == '', \
             'Error: Unknown attribute_name %s' % attribute_name
 
-        assert type(detection_score) == float, 'Error: detection_score must be a float!'
-        assert not np.any(np.isnan(detection_score)), 'Error: detection_score may not be NaN!'
+        assert type(
+            detection_score) == float, 'Error: detection_score must be a float!'
+        assert not np.any(np.isnan(detection_score)
+                          ), 'Error: detection_score may not be NaN!'
 
         # Assign.
         self.detection_name = detection_name
@@ -122,7 +131,10 @@ class OmniDetectionBox(DetectionBox):
 
 
 class Omni3DEval:
-    def __init__(self, pred_annos, gt_annos):
+    def __init__(self, pred_annos, gt_annos, ref_range=None):
+        if ref_range is not None:
+            EVAL_CONFIG['class_range'] = {
+                k: v/48 * ref_range for k, v in EVAL_CONFIG['class_range'].items()}
         self.cfg = OmniDetectionConfig.deserialize(EVAL_CONFIG)
         self.pred_boxes = EvalBoxes.deserialize(
             pred_annos, OmniDetectionBox)
@@ -133,7 +145,6 @@ class Omni3DEval:
         self.gt_boxes = self.filter_eval_boxes(
             self.gt_boxes, self.cfg.class_range)
         self.sample_tokens = self.gt_boxes.sample_tokens
-
 
     def filter_eval_boxes(self, eval_boxes, max_dist):
         class_field = _get_box_class_field(eval_boxes)
@@ -179,7 +190,8 @@ class Omni3DEval:
 
         details = {}
         # Print high-level metrics.
-        result = '{:<12s} {:<6.4f}\n'.format('mAP:', metrics_summary['mean_ap'])
+        result = '{:<12s} {:<6.4f}\n'.format(
+            'mAP:', metrics_summary['mean_ap'])
         details['mAP'] = metrics_summary['mean_ap']
         err_name_mapping = {
             'trans_err': 'mATE',
@@ -191,9 +203,9 @@ class Omni3DEval:
                 err_name_mapping[tp_name] + ':', tp_val)
             details[err_name_mapping[tp_name]] = tp_val
         result += '{:<12s} {:<6.4f}\n'.format('NDS:',
-                                            metrics_summary['nd_score'])
+                                              metrics_summary['nd_score'])
         result += '{:<12s} {:<6.3f}s\n'.format('Eval time:',
-                                             metrics_summary['eval_time'])
+                                               metrics_summary['eval_time'])
         details['NDS'] = metrics_summary['nd_score']
 
         # Print per-class metrics.
