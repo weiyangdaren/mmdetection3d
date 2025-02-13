@@ -12,12 +12,12 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 voxel_size = [0.2, 0.2, 10]
-ref_range = 48
+ref_range = 42
 detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type='cam_fisheye'
 cam_fov = 220
 train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
-val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_val.pkl'
 backend_args = None
 
 train_pipeline = [
