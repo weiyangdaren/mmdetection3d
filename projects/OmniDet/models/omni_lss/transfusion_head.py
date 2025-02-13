@@ -156,6 +156,7 @@ class TransFusionHead(nn.Module):
             'out_size_factor']
         y_size = self.test_cfg['grid_size'][1] // self.test_cfg[
             'out_size_factor']
+        x_size, y_size = int(x_size), int(y_size)
         self.bev_pos = self.create_2D_grid(x_size, y_size)
 
         self.img_feat_pos = None
@@ -220,7 +221,6 @@ class TransFusionHead(nn.Module):
                                                fusion_feat.shape[1],
                                                -1)  # [BS, C, H*W]
         bev_pos = self.bev_pos.repeat(batch_size, 1, 1).to(fusion_feat.device)
-
         #################################
         # query initialization
         #################################

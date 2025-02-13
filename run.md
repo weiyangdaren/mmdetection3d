@@ -11,7 +11,7 @@ python projects/OmniDet/tools/omni_converter.py
 
 # Train
 ```bash
-CUDA_VISIBLE_DEVICES=7 python tools/train.py projects/OmniDet/configs/petr/nusc_petr_42.py --auto-scale-lr
+CUDA_VISIBLE_DEVICES=7 python tools/train.py projects/OmniDet/configs/bevdet/fisheye_bevdet_42.py --auto-scale-lr
 python tools/train.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py
 ```
 

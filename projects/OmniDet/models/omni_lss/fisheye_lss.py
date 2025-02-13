@@ -10,12 +10,11 @@ from .ops import bev_pool
 
 
 def gen_dx_bx(xbound, ybound, zbound):
-    print(xbound, ybound, zbound)
-    dx = torch.Tensor([row[2] for row in [xbound, ybound, zbound]])
+    dx = torch.Tensor([row[2] for row in [xbound, ybound, zbound]])  # 步长
     bx = torch.Tensor(
-        [row[0] + row[2] / 2.0 for row in [xbound, ybound, zbound]])
+        [row[0] + row[2] / 2.0 for row in [xbound, ybound, zbound]])  # 起始点
     nx = torch.LongTensor([int((row[1] - row[0]) / row[2])
-                           for row in [xbound, ybound, zbound]])
+                           for row in [xbound, ybound, zbound]])  # 网格个数
     return dx, bx, nx
 
 
@@ -125,6 +124,10 @@ class BaseViewTransform(nn.Module):
         x = x.reshape(Nprime, C)
 
         # flatten indices
+        # self.bx - self.dx / 2.0是网格的 最小边界值
+        # (geom_feats - (self.bx - self.dx / 2.0))将 geom_feats平移到网格坐标系中
+        # (...) / self.dx归一化到网格坐标
+        # 即，原始点 (x, y, z) 空间坐标被量化到整数体素索引坐标中
         geom_feats = ((geom_feats - (self.bx - self.dx / 2.0)) /
                       self.dx).long()
         geom_feats = geom_feats.view(Nprime, 3)
@@ -148,7 +151,7 @@ class BaseViewTransform(nn.Module):
                      self.nx[2], self.nx[0], self.nx[1], mean_pool=True)
 
         # collapse Z
-        final = torch.cat(x.unbind(dim=2), 1)
+        final = torch.cat(x.unbind(dim=2), 1)  # 沿着 dim=2 维度拆解 x，然后沿着 dim=1 维度拼接
 
         return final
 
@@ -729,7 +732,7 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         img_metas,
         **kwargs
     ):
-        import matplotlib.pyplot as plt
+        # import matplotlib.pyplot as plt
 
         camera2lidar_rots = camera2lidar[..., :3, :3]
         camera2lidar_trans = camera2lidar[..., :3, 3]

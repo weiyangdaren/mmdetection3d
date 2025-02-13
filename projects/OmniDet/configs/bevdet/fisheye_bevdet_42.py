@@ -21,6 +21,8 @@ xbound=[-ref_range, ref_range, 0.3]
 ybound=[-ref_range, ref_range, 0.3]
 zbound=[-5.0, 5.0, 10.0]
 dbound=[0.5, ref_range+0.5, 0.5]
+voxel_size=[0.075, 0.075, 0.2]
+grid_size=[int(ref_range * 2 // voxel_size[0]), int(ref_range * 2 // voxel_size[1]), 40]
 backend_args = None
 
 train_pipeline = [
@@ -171,11 +173,11 @@ model = dict(
             center=[2, 2], height=[1, 2], dim=[3, 2], rot=[2, 2]),
         bbox_coder=dict(
             type='TransFusionBBoxCoder',
-            pc_range=[-48.0, -48.0],
+            pc_range=[-ref_range, -ref_range],
             post_center_range=[-50, -50, -5.0, 50, 50, 5.0],
             score_threshold=0.0,
             out_size_factor=8,
-            voxel_size=[0.075, 0.075],
+            voxel_size=voxel_size,
             code_size=8),
         loss_cls=dict(
             type='mmdet.FocalLoss',
@@ -195,8 +197,8 @@ model = dict(
         pts=dict(
             dataset='Omni3D',
             point_cloud_range=detect_range,
-            grid_size=[1280, 1280, 40],
-            voxel_size=[0.075, 0.075, 0.2],
+            grid_size=grid_size,
+            voxel_size=voxel_size,
             out_size_factor=8,
             gaussian_overlap=0.1,
             min_radius=2,
@@ -218,10 +220,10 @@ model = dict(
             lidar_key='points',),
         pts=dict(
             dataset='Omni3D',
-            grid_size=[1280, 1280, 40],
+            grid_size=grid_size,
             out_size_factor=8,
-            voxel_size=[0.075, 0.075],
-            pc_range=[-48.0, -48.0],
+            voxel_size=voxel_size,
+            pc_range=[-ref_range, -ref_range],
             nms_type=None),),
 )
 
@@ -265,7 +267,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.0001
+learning_rate = 0.0002
 max_epochs = 20
 param_scheduler = [
     dict(
