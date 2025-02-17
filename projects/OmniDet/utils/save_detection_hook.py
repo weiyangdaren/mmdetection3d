@@ -20,8 +20,7 @@ class SaveDetectionHook(Hook):
             self.label2name = {i: name for i, name in enumerate(class_names)}
         else:
             self.label2name = None
-        self.cam_
-
+ 
     def init_store(self):
         self.detection_outputs = []
     
