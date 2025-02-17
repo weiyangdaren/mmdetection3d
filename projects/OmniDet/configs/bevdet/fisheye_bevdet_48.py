@@ -33,14 +33,6 @@ train_pipeline = [
         load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
                         'fisheye_camera_right', 'fisheye_camera_rear',
                         ]),
-    # dict(
-    #     type='LoadOmni3DPointsFromFile',
-    #     coord_type='LIDAR',
-    #     load_dim=4,
-    #     use_dim=3,
-    #     backend_args=backend_args,
-    #     load_point_type='lidar'),
-
     dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
@@ -331,7 +323,7 @@ default_hooks = dict(
     )
 
 custom_hooks = [
-    dict(type='OutputHook', save_dir='output'),
+    dict(type='SaveDetectionHook', score_thr=0.01, class_names=classes),
 ]
 
 find_unused_parameters = False

@@ -326,7 +326,7 @@ default_hooks = dict(
     )
 
 custom_hooks = [
-    dict(type='OutputHook', save_dir='output'),
+    dict(type='SaveDetectionHook', score_thr=0.01, class_names=classes),
 ]
 
 find_unused_parameters = False

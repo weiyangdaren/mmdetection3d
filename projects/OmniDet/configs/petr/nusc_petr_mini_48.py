@@ -1,4 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
+_base_ = ['../default_runtime.py']
 
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
@@ -12,12 +12,25 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 voxel_size = [0.2, 0.2, 10]
-detect_range = [-48, -48, -5, 48, 48, 5]
-cam_type='cam_fisheye'
-cam_fov = 220
+ref_range = 48
+detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
+cam_type='cam_nusc'
 train_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
-val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_val.pkl'
+
+
 backend_args = None
+
+ida_aug_conf = {
+    'resize_lim': (0.625, 0.625),
+    'final_dim': (400, 800),
+    'bot_pct_lim': (0.0, 0.0),
+    'rot_lim': (0.0, 0.0),
+    'H': 720,
+    'W': 1280,
+    'rand_flip': False,
+    'img_key': cam_type,
+}
 
 train_pipeline = [
     dict(
@@ -26,13 +39,15 @@ train_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
-                        ]),
+        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
     dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
+    dict(
+        type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
     dict(
         type='ObjectRangeFilter',
         point_cloud_range=detect_range),
@@ -40,7 +55,8 @@ train_pipeline = [
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'box_type_3d', 'token'],
+            'cam2img', 'img_shape', 'cam2lidar', 'lidar2cam', 
+            'img_aug_matrix', 'box_type_3d'],
         input_img_keys=[cam_type],)
 ]
 
@@ -51,20 +67,22 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
-                        ]),
+        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+    dict(
+        type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
     dict(
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2img', 'lidar2cam',
+            'cam2img', 'img_shape', 'cam2lidar', 'lidar2cam',
             'sample_idx', 'token', 'img_path', 'lidar_path', 
-            'num_pts_feats', 'box_type_3d',],
+            'num_pts_feats', 'img_aug_matrix', 'box_type_3d',],
         input_img_keys=[cam_type],)
 ]
 
-import math
+
 model = dict(
     type='OmniPETR',
     data_preprocessor=dict(
@@ -91,7 +109,7 @@ model = dict(
         out_channels=256,
         num_outs=2),
     pts_bbox_head=dict(
-        type='OmniPETRHead',
+        type='PETRHead',
         num_classes=6,
         code_size=8,  # x, y, z, w, l, h, sin, cos, we dont predict velocity
         in_channels=256,
@@ -102,12 +120,6 @@ model = dict(
         depth_start=0.5,
         position_range=[-60, -60, -10.0, 60, 60, 10.0],
         normedlinear=False,
-        ocam_fov=cam_fov,
-        ocam_path='data/CarlaCollection/calib_results.txt',
-        feature_size=(25, 100),
-        dbound=(0.5, 48.5, 0.5),
-        azimuth_range=(-math.radians(cam_fov/2), math.radians(cam_fov/2)),
-        elevation_range=(-math.pi/4, math.pi/4),
         transformer=dict(
             type='PETRTransformer',
             decoder=dict(
@@ -173,7 +185,7 @@ model = dict(
 
 train_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
@@ -190,7 +202,7 @@ train_dataloader = dict(
 
 val_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
@@ -206,7 +218,7 @@ test_dataloader = val_dataloader
 # TODO
 val_evaluator = dict(
     type='Omni3DMetric',
-    ref_range=48,
+    ref_range=ref_range,
 )
 test_evaluator = val_evaluator
 
@@ -226,7 +238,7 @@ param_scheduler = [
         T_max=max_epochs,
         end=max_epochs,
         by_epoch=True,
-        eta_min_ratio=1e-4,
+        eta_min_ratio=5e-4,
         convert_to_iter_based=True),
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95

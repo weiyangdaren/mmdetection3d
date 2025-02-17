@@ -7,7 +7,6 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 import mmengine
 import numpy as np
 import pyquaternion
-import torch
 from mmengine import Config, load
 from mmengine.evaluator import BaseMetric
 from mmengine.logging import MMLogger
