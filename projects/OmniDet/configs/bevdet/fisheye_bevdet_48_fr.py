@@ -13,10 +13,14 @@ custom_imports = dict(
 dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
-ref_range = 42
+ref_range = 48
 detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type = 'cam_fisheye'
 cam_fov = 220
+xbound=[-ref_range, ref_range, 0.3]
+ybound=[-ref_range, ref_range, 0.3]
+zbound=[-5.0, 5.0, 10.0]
+dbound=[0.5, ref_range+0.5, 0.5]
 backend_args = None
 
 train_pipeline = [
@@ -26,8 +30,7 @@ train_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
+        load_cam_names=['fisheye_camera_front', 'fisheye_camera_rear',
                         ]),
     # dict(
     #     type='LoadOmni3DPointsFromFile',
@@ -60,8 +63,7 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
+        load_cam_names=['fisheye_camera_front', 'fisheye_camera_rear',
                         ]),
     dict(
         type='OmniPack3DDetInputs',
@@ -107,10 +109,10 @@ model = dict(
         feature_size=[25, 100],
         azimuth_range=[-math.radians(cam_fov/2), math.radians(cam_fov/2)],
         elevation_range=[-math.pi/4, math.pi/4],
-        xbound=[-48, 48, 0.3],
-        ybound=[-48, 48, 0.3],
-        zbound=[-5, 5, 10],
-        dbound=[0.5, 48.5, 0.5],
+        xbound=xbound,
+        ybound=ybound,
+        zbound=zbound,
+        dbound=dbound,
         downsample=1,
         ocam_fov=cam_fov,),
     pts_backbone=dict(
@@ -167,11 +169,11 @@ model = dict(
             center=[2, 2], height=[1, 2], dim=[3, 2], rot=[2, 2]),
         bbox_coder=dict(
             type='TransFusionBBoxCoder',
-            pc_range=[-48, -48],
+            pc_range=[-48.0, -48.0],
             post_center_range=[-50, -50, -5.0, 50, 50, 5.0],
             score_threshold=0.0,
             out_size_factor=8,
-            voxel_size=[0.075, 0.075, 0.2],
+            voxel_size=[0.075, 0.075],
             code_size=8),
         loss_cls=dict(
             type='mmdet.FocalLoss',
@@ -191,7 +193,7 @@ model = dict(
         pts=dict(
             dataset='Omni3D',
             point_cloud_range=detect_range,
-            grid_size=[1280, 1280, 50],
+            grid_size=[1280, 1280, 40],
             voxel_size=[0.075, 0.075, 0.2],
             out_size_factor=8,
             gaussian_overlap=0.1,
@@ -214,10 +216,10 @@ model = dict(
             lidar_key='points',),
         pts=dict(
             dataset='Omni3D',
-            grid_size=[1280, 1280, 50],
+            grid_size=[1280, 1280, 40],
             out_size_factor=8,
-            voxel_size=[0.075, 0.075, 0.2],
-            pc_range=[-48, -48],
+            voxel_size=[0.075, 0.075],
+            pc_range=[-48.0, -48.0],
             nms_type=None),),
 )
 
@@ -261,7 +263,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.0005
+learning_rate = 0.0001
 max_epochs = 20
 param_scheduler = [
     dict(

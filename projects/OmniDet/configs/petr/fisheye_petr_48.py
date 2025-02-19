@@ -213,7 +213,7 @@ test_evaluator = val_evaluator
 
 
 learning_rate = 0.0002
-max_epochs = 20
+max_epochs = 40
 param_scheduler = [
     dict(
         type='LinearLR',
@@ -266,7 +266,16 @@ auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=100),
-    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=5),)
+    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=10),
+    early_stopping=dict(
+        type='EarlyStoppingHook',
+        monitor='NDS',            
+        rule='greater',            
+        min_delta=0.0002,             
+        strict=True,                
+        check_finite=True,          
+        patience=3)
+    )
 
 custom_hooks = [
     dict(type='OutputHook', save_dir='output'),
