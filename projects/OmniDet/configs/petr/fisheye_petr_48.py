@@ -207,7 +207,7 @@ test_dataloader = val_dataloader
 # TODO
 val_evaluator = dict(
     type='Omni3DMetric',
-    ref_range=ref_range,
+    ref_range=48,
 )
 test_evaluator = val_evaluator
 
@@ -266,6 +266,7 @@ auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=100),
+    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=10),)
     checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=10),
     early_stopping=dict(
         type='EarlyStoppingHook',
@@ -278,7 +279,7 @@ default_hooks = dict(
     )
 
 custom_hooks = [
-    dict(type='OutputHook', save_dir='output'),
+    dict(type='SaveDetectionHook', score_thr=0.03, class_names=classes),
 ]
 
 find_unused_parameters = False

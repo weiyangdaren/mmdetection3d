@@ -8,6 +8,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # ------------------------------------------------------------------------
 import math
+from re import M
 
 import numpy as np
 import torch
@@ -420,8 +421,9 @@ class OmniPETRHead(AnchorFreeHead):
 
         D = coords_d.shape[0]
         coords_d = coords_d.view(D, 1, 1).expand(-1, H, W)
+        min_theta, max_theta = self.azimuth_range
         min_phi, max_phi = self.elevation_range
-        azimuths = torch.linspace(-torch.pi, torch.pi, W,
+        azimuths = torch.linspace(min_theta, max_theta, W,
                                   dtype=torch.float,
                                   device=img_feats[0].device).view(1, 1, W).expand(D, H, W)
         elevations = torch.linspace(min_phi, max_phi, H,

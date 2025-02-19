@@ -705,7 +705,7 @@ class FisheyeLSSTransformV2(FisheyeLSSTransform):
         B, N, C, fH, fW = x.shape
         x = x.view(B * N, C, fH, fW)
         warp_x = F.grid_sample(
-            x, self.sphere_grid_2d.unsqueeze(0).expand(B * N, -1, -1, -1), align_corners=True)
+            x, self.sphere_grid_2d.unsqueeze(0).expand(B * N, -1, -1, -1), align_corners=True)  # BN x C x H x W
         x = self.depthnet(warp_x)
         # self.valid_fov_mask = self.valid_fov_mask.unsqueeze(0).expand(B * N, -1, -1, -1)
         # x = x * self.valid_fov_mask
