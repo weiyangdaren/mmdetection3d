@@ -207,7 +207,7 @@ test_dataloader = val_dataloader
 # TODO
 val_evaluator = dict(
     type='Omni3DMetric',
-    ref_range=ref_range,
+    ref_range=42,
 )
 test_evaluator = val_evaluator
 
