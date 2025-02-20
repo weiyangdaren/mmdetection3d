@@ -43,8 +43,8 @@ class SaveDetectionHook(Hook):
             else:
                 labels_3d = labels_3d.numpy()
             save_result['annos']['pred_names'] = labels_3d
-            save_result['annos']['pred_boxes'] = bboxes_3d.tensor.numpy()
-            save_result['annos']['pred_scores'] = scores_3d.numpy()
+            save_result['annos']['pred_boxes'] = bboxes_3d.tensor.cpu().numpy()
+            save_result['annos']['pred_scores'] = scores_3d.cpu().numpy()
             self.detection_outputs.append(save_result)
     
     def dump_results(self, runner: Runner):
