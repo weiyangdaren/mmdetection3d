@@ -56,7 +56,7 @@ train_pipeline = [
         with_label_3d=True,),
     dict(
         type='ImageAug3D',
-        final_dim=[400, 800],
+        final_dim=[800, 800],
         resize_lim=[0.625, 0.625],
         bot_pct_lim=[0.0, 0.0],
         rot_lim=[0, 0],
@@ -86,7 +86,7 @@ test_pipeline = [
                         'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
     dict(
         type='ImageAug3D',
-        final_dim=[400, 800],
+        final_dim=[800, 800],
         resize_lim=[0.625, 0.625],
         bot_pct_lim=[0.0, 0.0],
         rot_lim=[0.0, 0.0],
@@ -133,8 +133,8 @@ model = dict(
         type='LSSTransform',
         in_channels=256,
         out_channels=96,
-        image_size=[400, 800],
-        feature_size=[25, 50],
+        image_size=[800, 800],
+        feature_size=[50, 50],
         xbound=xbound,
         ybound=ybound,
         zbound=zbound,
@@ -287,7 +287,7 @@ test_dataloader = val_dataloader
 
 # TODO implement evaluator by distance and weathers
 val_evaluator = dict(
-    type='Omni3DMetricEXP',
+    type='Omni3DMetric',
 )
 test_evaluator = val_evaluator
 

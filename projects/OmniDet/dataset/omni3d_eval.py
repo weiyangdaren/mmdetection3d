@@ -19,7 +19,6 @@ from nuscenes.eval.detection.algo import accumulate, calc_ap, calc_tp
 DETECTION_NAMES = ["Car", "Van", "Truck", "Bus", "Pedestrian", "Cyclist"]
 ATTRIBUTE_NAMES = ['pedestrian.moving', 'cycle.with_rider', 'vehicle.moving']
 TP_METRICS = ['trans_err', 'scale_err', 'orient_err']
-CLASS_RANGE = {'48': 48, '42': 42, '36': 36, '30': 30}
 EVAL_CONFIG = {
     'class_range': {
         'Car': 48,
@@ -132,10 +131,12 @@ class OmniDetectionBox(DetectionBox):
 
 class Omni3DEval:
     def __init__(self, pred_annos, gt_annos, ref_range=None):
+        eval_config = EVAL_CONFIG.copy()
         if ref_range is not None:
-            EVAL_CONFIG['class_range'] = {
-                k: v/48 * ref_range for k, v in EVAL_CONFIG['class_range'].items()}
-        self.cfg = OmniDetectionConfig.deserialize(EVAL_CONFIG)
+            class_range = {
+                k: v/48 * ref_range for k, v in eval_config['class_range'].items()}
+            eval_config['class_range'] = class_range
+        self.cfg = OmniDetectionConfig.deserialize(eval_config)
         self.pred_boxes = EvalBoxes.deserialize(
             pred_annos, OmniDetectionBox)
         self.gt_boxes = EvalBoxes.deserialize(
