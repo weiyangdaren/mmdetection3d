@@ -287,7 +287,7 @@ test_dataloader = val_dataloader
 
 # TODO implement evaluator by distance and weathers
 val_evaluator = dict(
-    type='Omni3DMetric',
+    type='Omni3DMetricEXP',
 )
 test_evaluator = val_evaluator
 
