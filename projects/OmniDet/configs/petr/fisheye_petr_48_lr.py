@@ -27,12 +27,7 @@ train_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-<<<<<<< HEAD
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
-=======
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_rear',
->>>>>>> a8c6b7937dd42ea566d85d47a6acffecd9585b0e
+        load_cam_names=['fisheye_camera_left', 'fisheye_camera_right',
                         ]),
     dict(
         type='LoadAnnotations3D',
@@ -56,7 +51,7 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_rear',
+        load_cam_names=['fisheye_camera_left', 'fisheye_camera_right',
                         ]),
     dict(
         type='OmniPack3DDetInputs',
@@ -215,7 +210,7 @@ val_evaluator = dict(
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.0002
+learning_rate = 0.00018
 max_epochs = 20
 param_scheduler = [
     dict(
