@@ -12,6 +12,7 @@ from mmdet3d.models import Base3DDetector
 from mmdet3d.registry import MODELS
 from mmdet3d.structures import Det3DDataSample
 from mmdet3d.utils import OptConfigType, OptMultiConfig, OptSampleList
+from mmengine.utils.dl_utils import TimeCounter
 
 
 @MODELS.register_module()
@@ -205,6 +206,7 @@ class OmniLSS(Base3DDetector):
     ):
         pass
 
+    @TimeCounter(log_interval=100, warmup_interval=100, tag="FisheyeBEVDet Infer Time") 
     def predict(
         self,
         batch_inputs_dict: Dict[str, Optional[Tensor]],

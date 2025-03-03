@@ -7,6 +7,7 @@ from mmengine.structures import InstanceData
 from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from mmdet3d.registry import MODELS
 from mmdet3d.structures.ops import bbox3d2result
+from mmengine.utils.dl_utils import TimeCounter
 
 
 @MODELS.register_module()
@@ -166,6 +167,7 @@ class OmniPETR(MVXTwoStageDetector):
             result_dict['pts_bbox'] = pts_bbox
         return bbox_list
     
+    @TimeCounter(log_interval=100, warmup_interval=100, tag="OmniPETR Infer Time")
     def predict(self, inputs=None, data_samples=None, mode=None, **kwargs):
         img = inputs[self.img_key]
         batch_img_metas = [ds.metainfo for ds in data_samples]

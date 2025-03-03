@@ -17,8 +17,8 @@ python tools/train.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py
 
 # Test
 ```bash
-python tools/test.py projects/OmniDet/configs/petr/fisheye_petr_48.py work_dirs/nusc_bevdet/epoch_10.pth
-python tools/test.py projects/OmniDet/configs/bevdet/fisheye_bevdet_48.py work_dirs/fisheye_bevdet_48/epoch_14.pth
+python tools/test.py projects/OmniDet/configs/petr/fisheye_petr_48_fr.py work_dirs/fisheye_petr_48/epoch_16.pth
+python tools/test.py projects/OmniDet/configs/bevdet/fisheye_bevdet_48_fr.py work_dirs/fisheye_bevdet_48/epoch_14.pth
 python tools/test.py projects/PETR/configs/petr_vovnet_gridmask_p4_800x320.py work_dirs/petr_vovnet_gridmask_p4_800x320/epoch_24.pth
 ```
 

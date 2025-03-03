@@ -52,8 +52,7 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
+        load_cam_names=['fisheye_camera_front', 'fisheye_camera_rear',
                         ]),
     dict(
         type='OmniPack3DDetInputs',

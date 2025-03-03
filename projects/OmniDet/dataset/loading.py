@@ -180,3 +180,7 @@ class LoadOmni3DMultiViewImageFromFiles(LoadMultiViewImageFromFiles):
         # results.pop('cam_info')
         results[self.load_cam_type] = ret_dict
         return results
+
+
+@TRANSFORMS.register_module()
+class RandomDropSensor():
