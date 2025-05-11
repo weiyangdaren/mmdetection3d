@@ -40,6 +40,7 @@ lidar2cam_M = np.array([[ 0, -1,  0,  0 ],
                         [ 0,  0, -1,  0 ],
                         [ 1,  0,  0,  0 ],
                         [ 0,  0,  0,  1 ]])
+cam2lidar_M = np.linalg.inv(lidar2cam_M)
 
 
 @TRANSFORMS.register_module()
@@ -133,7 +134,8 @@ class MultiViewFisheyePerspectiveProjection(BaseTransform):
                 R_yaw = np.eye(4)
                 R_yaw[:3, :3] = _R_yaw
                 _lidar2cam = copy.deepcopy(results['cam_fisheye']['lidar2cam'][i])
-                _lidar2cam = np.linalg.inv(lidar2cam_M) @ R_yaw @ lidar2cam_M @ _lidar2cam
+                # _lidar2cam = np.linalg.inv(lidar2cam_M) @ R_yaw @ lidar2cam_M @ _lidar2cam
+                _lidar2cam = lidar2cam_M @ R_yaw @ cam2lidar_M @ _lidar2cam
                 lidar2cam.append(_lidar2cam)
                
                 _cam2lidar = copy.deepcopy(results['cam_fisheye']['cam2lidar'][i])
