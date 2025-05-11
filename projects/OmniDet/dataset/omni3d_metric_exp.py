@@ -78,14 +78,26 @@ class Omni3DMetricEXP(BaseMetric):
         # }
 
         # for experiment
-        ref_range_list = [30, 36, 42, 48]
-        for ref_range in ref_range_list:
-            eval_title = f'\n================== Omni3D Evaluation with ref_range={ref_range} ==================\n'
-            omni3d_eval = Omni3DEval(pred_annos, gt_annos, ref_range=ref_range)
+        # ref_range_list = [30, 36, 42, 48]
+        # for ref_range in ref_range_list:
+        #     eval_title = f'\n================== Omni3D Evaluation with ref_range={ref_range} ==================\n'
+        #     omni3d_eval = Omni3DEval(pred_annos, gt_annos, ref_range=ref_range)
+        #     _, result, _ = omni3d_eval.main()
+        #     result = eval_title + result
+        #     logger.info(result)
+
+        # for experiment
+        self.eval_distance = [0, 12, 24, 36, 48]
+        pred_annos_by_distance = self.split_annos_by_distance(pred_annos, tolerance=0.5)
+        gt_annos_by_distance = self.split_annos_by_distance(gt_annos, tolerance=0.5)
+        for distance_range in pred_annos_by_distance.keys():
+            eval_title = f'\n================== Omni3D Evaluation with distance_range={distance_range} ==================\n'
+            omni3d_eval = Omni3DEval(pred_annos_by_distance[distance_range], gt_annos_by_distance[distance_range])
             _, result, _ = omni3d_eval.main()
             result = eval_title + result
             logger.info(result)
-            
+
+
         self.eval_weather = ['Noon', 'Sunset', 'Night']
         pred_annos_by_weather = self.split_annos_by_weather(pred_annos)
         gt_annos_by_weather = self.split_annos_by_weather(gt_annos)
@@ -147,7 +159,7 @@ class Omni3DMetricEXP(BaseMetric):
                     ]
         '''
         adjusted_ranges = []
-        for i in range(len(self.eval_distance)):
+        for i in range(1, len(self.eval_distance)):
             lower = (self.eval_distance[i - 1] if i > 0 else 0) - tolerance
             upper = self.eval_distance[i] + tolerance
             adjusted_ranges.append((lower, upper))

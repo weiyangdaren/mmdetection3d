@@ -1,9 +1,8 @@
-from typing import List, Sequence, Union
+from typing import Sequence, Union
 
 import mmengine
 import numpy as np
 import torch
-from mmcv import BaseTransform
 from mmengine.structures import InstanceData
 from numpy import dtype
 

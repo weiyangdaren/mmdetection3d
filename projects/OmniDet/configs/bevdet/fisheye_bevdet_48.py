@@ -37,7 +37,6 @@ train_pipeline = [
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
-
     dict(
         type='ObjectRangeFilter',
         point_cloud_range=detect_range),

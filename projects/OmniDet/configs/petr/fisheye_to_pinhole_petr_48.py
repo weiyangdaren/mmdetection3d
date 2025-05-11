@@ -1,4 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
+_base_ = ['../default_runtime.py']
 
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
@@ -12,11 +12,12 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 voxel_size = [0.2, 0.2, 10]
-detect_range = [-48, -48, -5, 48, 48, 5]
+ref_range = 48
+detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type='cam_fisheye'
 cam_fov = 220
-train_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
-val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
+train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_val.pkl'
 backend_args = None
 
 train_pipeline = [
@@ -30,6 +31,12 @@ train_pipeline = [
                         'fisheye_camera_right', 'fisheye_camera_rear',
                         ]),
     dict(
+        type='MultiViewFisheyePerspectiveProjection',
+        image_size=(400, 400),
+        perspective_fov=cam_fov//2,
+        num_imgs_of_per_view=2,
+        camera_orientation=[-cam_fov//4, cam_fov//4],),
+    dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
@@ -40,7 +47,7 @@ train_pipeline = [
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'box_type_3d', 'token'],
+            'cam2img', 'img_shape', 'cam2lidar', 'lidar2cam', 'lidar2img', 'box_type_3d', 'token'],
         input_img_keys=[cam_type],)
 ]
 
@@ -55,12 +62,18 @@ test_pipeline = [
                         'fisheye_camera_right', 'fisheye_camera_rear',
                         ]),
     dict(
+        type='MultiViewFisheyePerspectiveProjection',
+        image_size=(400, 400),
+        perspective_fov=cam_fov//2,
+        num_imgs_of_per_view=2,
+        camera_orientation=[-cam_fov//4, cam_fov//4],),
+    dict(
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2img', 'lidar2cam',
-            'sample_idx', 'token', 'img_path', 'lidar_path', 
-            'num_pts_feats', 'box_type_3d',],
+            'cam2img', 'img_shape', 'cam2lidar', 'lidar2img', 
+            'lidar2cam', 'sample_idx', 'token', 'img_path', 
+            'lidar_path', 'num_pts_feats', 'box_type_3d',],
         input_img_keys=[cam_type],)
 ]
 
@@ -91,7 +104,7 @@ model = dict(
         out_channels=256,
         num_outs=2),
     pts_bbox_head=dict(
-        type='OmniPETRHead',
+        type='PETRHead',
         num_classes=6,
         code_size=8,  # x, y, z, w, l, h, sin, cos, we dont predict velocity
         in_channels=256,
@@ -102,12 +115,6 @@ model = dict(
         depth_start=0.5,
         position_range=[-60, -60, -10.0, 60, 60, 10.0],
         normedlinear=False,
-        ocam_fov=cam_fov,
-        ocam_path='data/CarlaCollection/calib_results.txt',
-        feature_size=(25, 100),
-        dbound=(0.5, 48.5, 0.5),
-        azimuth_range=(-math.radians(cam_fov/2), math.radians(cam_fov/2)),
-        elevation_range=(-math.pi/4, math.pi/4),
         transformer=dict(
             type='PETRTransformer',
             decoder=dict(
@@ -171,6 +178,7 @@ model = dict(
                 pc_range=detect_range,)))
 )
 
+
 train_dataloader = dict(
     batch_size=4,
     num_workers=16,
@@ -205,8 +213,7 @@ test_dataloader = val_dataloader
 
 # TODO
 val_evaluator = dict(
-    type='Omni3DMetric',
-    ref_range=48,
+    type='Omni3DMetricEXP',
 )
 test_evaluator = val_evaluator
 
@@ -226,7 +233,7 @@ param_scheduler = [
         T_max=max_epochs,
         end=max_epochs,
         by_epoch=True,
-        eta_min_ratio=1e-4,
+        eta_min_ratio=5e-4,
         convert_to_iter_based=True),
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95
@@ -265,10 +272,11 @@ auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=100),
-    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=5),)
+    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=10),
+    )
 
 custom_hooks = [
-    dict(type='SaveDetectionHook', score_thr=0.01, class_names=classes),
+    dict(type='SaveDetectionHook', score_thr=0.03, class_names=classes),
 ]
 
 find_unused_parameters = False

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-# from mmengine.dataset import BaseDataset
+from mmengine.dataset import BaseDataset
 from mmdet3d.registry import DATASETS
 from mmdet3d.datasets import Det3DDataset
 from mmdet3d.structures import LiDARInstance3DBoxes

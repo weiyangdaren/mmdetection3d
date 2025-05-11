@@ -56,22 +56,20 @@ class OmniLSS(Base3DDetector):
 
         self.depth_head = MODELS.build(
             depth_head) if depth_head is not None else None
-        
-        if self.training and train_cfg:
-            self.img_key= train_cfg.input_key.img_key
-            self.lidar_key = train_cfg.input_key.lidar_key
-        
-        if not self.training and test_cfg:
-            self.img_key= test_cfg.input_key.img_key
-            self.lidar_key = test_cfg.input_key.lidar_key
 
-    
+        if self.training and train_cfg:
+            self.img_key = train_cfg.input_key.img_key
+            self.lidar_key = train_cfg.input_key.lidar_key
+
+        if not self.training and test_cfg:
+            self.img_key = test_cfg.input_key.img_key
+            self.lidar_key = test_cfg.input_key.lidar_key
 
     @property
     def with_bbox_head(self):
         """bool: Whether the detector has a box head."""
         return hasattr(self, 'bbox_head') and self.bbox_head is not None
-    
+
     @property
     def with_depth_head(self):
         """bool: Whether the detector has a depth head."""
@@ -131,13 +129,13 @@ class OmniLSS(Base3DDetector):
                 lidar_aug_matrix,
                 img_metas
             )
-        
+
         if isinstance(x, tuple):
             bev_feat = x[0]
             img_feat = x[1]
         else:
             bev_feat = x
-            
+
         return bev_feat, img_feat
 
     def extract_feat(
@@ -158,13 +156,19 @@ class OmniLSS(Base3DDetector):
         lidar2camera, lidar2image, camera_intrinsics, camera2lidar = [], [], [], []
         img_aug_matrix, lidar_aug_matrix = [], []
         for i, meta in enumerate(batch_input_metas):
+            num_views = len(meta[self.img_key]['lidar2cam'])
+
             lidar2camera.append(meta[self.img_key]['lidar2cam'])
-            lidar2image.append(meta[self.img_key]['lidar2img'])
-            camera_intrinsics.append(meta[self.img_key].get('cam2img', np.eye(4)))  # fisheye camera intrinsic matrix is not available
             camera2lidar.append(meta[self.img_key]['cam2lidar'])
-            img_aug_matrix.append(meta[self.img_key].get('img_aug_matrix', np.eye(4)))
-            lidar_aug_matrix.append(
-                meta[self.img_key].get('lidar_aug_matrix', np.eye(4)))
+
+            camera_intrinsics.append(meta[self.img_key].get(
+                'cam2img', np.repeat(np.eye(4)[None, ...], num_views, axis=0)))  # fisheye camera intrinsic matrix is not available
+            lidar2image.append(meta[self.img_key].get(
+                'lidar2img', np.repeat(np.eye(4)[None, ...], num_views, axis=0)))
+            img_aug_matrix.append(meta[self.img_key].get(
+                'img_aug_matrix', np.repeat(np.eye(4)[None, ...], num_views, axis=0)))
+            lidar_aug_matrix.append(meta[self.img_key].get(
+                'lidar_aug_matrix', np.eye(4)))
 
         lidar2camera = imgs.new_tensor(np.asarray(lidar2camera))
         lidar2image = imgs.new_tensor(np.asarray(lidar2image))
@@ -174,16 +178,16 @@ class OmniLSS(Base3DDetector):
         lidar_aug_matrix = imgs.new_tensor(np.asarray(lidar_aug_matrix))
 
         bev_feat, img_feat = self.extract_cam_feat(
-            imgs, 
-            points, 
+            imgs,
+            points,
             lidar2camera,
             lidar2image,
-            camera_intrinsics, 
-            camera2lidar, 
-            img_aug_matrix, 
-            lidar_aug_matrix, 
+            camera_intrinsics,
+            camera2lidar,
+            img_aug_matrix,
+            lidar_aug_matrix,
             batch_input_metas)
-        
+
         # bev_feat = bev_feat.detach().cpu().numpy()
         # bev_feat = bev_feat[0].sum(0)
         # np.save('work_dirs/0features/n5.npy', bev_feat)
@@ -195,8 +199,8 @@ class OmniLSS(Base3DDetector):
         # _bev = torch.clamp(_bev, 0, 1)
         # plt.imshow(_bev.detach().cpu().numpy(), cmap='jet')
 
-        bev_feat = self.pts_backbone(bev_feat)
-        bev_feat = self.pts_neck(bev_feat)
+        bev_feat = self.pts_backbone(bev_feat)  # [bs, c, h, w]
+        bev_feat = self.pts_neck(bev_feat)  # [bs, c, h/2, w/2]
         return bev_feat, img_feat
 
     def _forward(
@@ -206,7 +210,7 @@ class OmniLSS(Base3DDetector):
     ):
         pass
 
-    @TimeCounter(log_interval=100, warmup_interval=100, tag="FisheyeBEVDet Infer Time") 
+    @TimeCounter(log_interval=100, warmup_interval=100, tag="FisheyeBEVDet Infer Time")
     def predict(
         self,
         batch_inputs_dict: Dict[str, Optional[Tensor]],
@@ -215,7 +219,8 @@ class OmniLSS(Base3DDetector):
     ) -> List[Det3DDataSample]:
 
         batch_input_metas = [item.metainfo for item in batch_data_samples]
-        bev_feat, img_feat = self.extract_feat(batch_inputs_dict, batch_input_metas)
+        bev_feat, img_feat = self.extract_feat(
+            batch_inputs_dict, batch_input_metas)
 
         if self.with_bbox_head:
             outputs = self.bbox_head.predict(bev_feat, batch_data_samples)
@@ -231,7 +236,8 @@ class OmniLSS(Base3DDetector):
     ) -> List[Det3DDataSample]:
 
         batch_input_metas = [item.metainfo for item in batch_data_samples]
-        bev_feat, img_feat = self.extract_feat(batch_inputs_dict, batch_input_metas)
+        bev_feat, img_feat = self.extract_feat(
+            batch_inputs_dict, batch_input_metas)
 
         losses = dict()
         if self.with_bbox_head:
@@ -240,7 +246,8 @@ class OmniLSS(Base3DDetector):
 
         if self.with_depth_head:
             points = batch_inputs_dict.get(self.lidar_key, None)
-            depth_loss = self.depth_head.loss(img_feat, points, batch_data_samples)
+            depth_loss = self.depth_head.loss(
+                img_feat, points, batch_data_samples)
             losses.update(depth_loss)
 
         return losses

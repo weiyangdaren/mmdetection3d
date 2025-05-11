@@ -112,6 +112,8 @@ data
 .idea
 
 # custom
+*.npy
+*.npz
 *.pkl
 *.pkl.json
 *.log.json

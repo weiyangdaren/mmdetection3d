@@ -1,6 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
-
-import math
+_base_ = ['../default_runtime.py']
 
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
@@ -13,22 +11,38 @@ custom_imports = dict(
 dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
-detect_range = [-48, -48, -5, 48, 48, 5]
-cam_type = 'cam_fisheye'
-cam_fov = 220
+ref_range = 48
+detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
+cam_type='cam_nusc'
+train_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_val.pkl'
+xbound=[-ref_range, ref_range, 0.3]
+ybound=[-ref_range, ref_range, 0.3]
+zbound=[-5.0, 5.0, 10.0]
+dbound=[0.5, ref_range+0.5, 0.5]
+
 
 backend_args = None
 
 train_pipeline = [
+    # dict(
+    #     type='LoadOmni3DMultiViewImageFromFiles',
+    #     to_float32=True,
+    #     color_type='color',
+    #     backend_args=backend_args,
+    #     load_cam_type='cam_fisheye',
+    #     load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
+    #                     'fisheye_camera_right', 'fisheye_camera_rear']),
     dict(
         type='LoadOmni3DMultiViewImageFromFiles',
         to_float32=True,
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
-                        ]),
+        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+
     # dict(
     #     type='LoadOmni3DPointsFromFile',
     #     coord_type='LIDAR',
@@ -36,20 +50,27 @@ train_pipeline = [
     #     use_dim=3,
     #     backend_args=backend_args,
     #     load_point_type='lidar'),
-
     dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
-
+    dict(
+        type='ImageAug3D',
+        final_dim=[400, 800],
+        resize_lim=[0.625, 0.625],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0, 0],
+        rand_flip=False,
+        is_train=False,
+        img_key=cam_type,),
     dict(
         type='ObjectRangeFilter',
         point_cloud_range=detect_range),
     dict(
         type='OmniPack3DDetInputs',
-        keys=[cam_type, 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+        keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
-            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'box_type_3d', 'token'],
+            'cam2img', 'cam2lidar', 'lidar2cam', 'lidar2img', 'img_aug_matrix', 'box_type_3d'],
         input_img_keys=[cam_type],)
 ]
 
@@ -60,16 +81,25 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['fisheye_camera_front', 'fisheye_camera_left',
-                        'fisheye_camera_right', 'fisheye_camera_rear',
-                        ]),
+        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+    dict(
+        type='ImageAug3D',
+        final_dim=[400, 800],
+        resize_lim=[0.625, 0.625],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0.0, 0.0],
+        rand_flip=False,
+        is_train=False,
+        img_key=cam_type,),
     dict(
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
             'cam2img', 'cam2lidar', 'lidar2img', 'lidar2cam',
             'sample_idx', 'token', 'img_path', 'lidar_path', 
-            'num_pts_feats', 'box_type_3d',],
+            'num_pts_feats', 'img_aug_matrix', 'box_type_3d',],
         input_img_keys=[cam_type],)
 ]
 
@@ -100,19 +130,16 @@ model = dict(
         out_channels=256,
         num_outs=2),
     view_transform=dict(
-        type='FisheyeLSSTransformV2',
+        type='LSSTransform',
         in_channels=256,
         out_channels=96,
-        image_size=[800, 800],
-        feature_size=[25, 100],
-        azimuth_range=[-math.radians(cam_fov/2), math.radians(cam_fov/2)],
-        elevation_range=[-math.pi/4, math.pi/4],
-        xbound=[-48.0, 48.0, 0.3],
-        ybound=[-48.0, 48.0, 0.3],
-        zbound=[-5.0, 5.0, 10.0],
-        dbound=[0.5, 48.5, 0.5],
-        downsample=1,
-        ocam_fov=cam_fov,),
+        image_size=[400, 800],
+        feature_size=[25, 50],
+        xbound=xbound,
+        ybound=ybound,
+        zbound=zbound,
+        dbound=dbound,
+        downsample=1),
     pts_backbone=dict(
         type='SECOND',
         in_channels=96,
@@ -129,17 +156,6 @@ model = dict(
         norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
         upsample_cfg=dict(type='deconv', bias=False),
         use_conv_for_no_stride=True),
-    # depth_head=dict(
-    #     type='OmniDepthHead',
-    #     dbound=[0.5, 48.5, 0.5],  # should consistent with view_transform
-    #     feature_size=[25, 100],  # should consistent with view_transform
-    #     padding_size=[32, 100],
-    #     elevation_range=[-math.pi/4, math.pi/4],  # should consistent with view_transform
-    #     in_channel=96,
-    #     layer_nums=[2, 2, 2],
-    #     num_filters=[64, 128, 256],
-    #     layer_strides=[2, 2, 2],
-    #     loss_depth=dict(type='mmdet.SmoothL1Loss', reduction='mean', loss_weight=0.2)),
     bbox_head=dict(
         type='TransFusionHead',
         num_proposals=200,
@@ -221,16 +237,17 @@ model = dict(
             nms_type=None),),
 )
 
+# CBGSDataset
 train_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
+            ann_file=train_ann_file,
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -238,14 +255,29 @@ train_dataloader = dict(
     )
 )
 
+
+# train_dataloader = dict(
+#     batch_size=4,
+#     num_workers=16,
+#     sampler=dict(type='DefaultSampler', shuffle=True),
+#     dataset=dict(
+#         type=dataset_type,
+#         data_root=data_root,
+#         ann_file=train_ann_file,
+#         pipeline=train_pipeline,
+#         test_mode=False,
+#         metainfo=dict(classes=classes),
+#     )
+# )
+
 val_dataloader = dict(
     batch_size=4,
-    num_workers=16,
+    num_workers=4,
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
+        ann_file=val_ann_file,
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),
@@ -253,15 +285,15 @@ val_dataloader = dict(
 )
 test_dataloader = val_dataloader
 
-# TODO
+# TODO implement evaluator by distance and weathers
 val_evaluator = dict(
-    type='Omni3DMetric',
+    type='Omni3DMetricEXP',
 )
 test_evaluator = val_evaluator
 
 
-learning_rate = 0.00005
-max_epochs = 10
+learning_rate = 0.0001
+max_epochs = 20
 param_scheduler = [
     dict(
         type='LinearLR',
@@ -275,7 +307,7 @@ param_scheduler = [
         T_max=max_epochs,
         end=max_epochs,
         by_epoch=True,
-        eta_min_ratio=1e-4,
+        eta_min_ratio=2e-4,
         convert_to_iter_based=True),
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95
@@ -309,21 +341,12 @@ val_cfg = dict()
 test_cfg = dict()
 
 
-auto_scale_lr = dict(enable=False, base_batch_size=8)
+auto_scale_lr = dict(enable=True, base_batch_size=8)
 
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=100),
-    checkpoint=dict(type='CheckpointHook', interval=1, ),
-    # early_stopping=dict(
-    #     type='EarlyStoppingHook',
-    #     monitor='NDS',            
-    #     rule='greater',            
-    #     min_delta=0.0002,             
-    #     strict=True,                
-    #     check_finite=True,          
-    #     patience=3)
-    )
+    checkpoint=dict(type='CheckpointHook', interval=1, max_keep_ckpts=5),)
 
 custom_hooks = [
     dict(type='SaveDetectionHook', score_thr=0.01, class_names=classes),

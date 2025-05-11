@@ -119,15 +119,8 @@ class OmniCalib:
         sensor2lidar = np.dot(world2lidar, sensor2world)
         lidar2sensor = np.dot(world2sensor, lidar2world)
 
-        # use right coord system
-        # use_right_coord = True
-        # if use_right_coord:
-        #     sensor2lidar = left_coord_to_right_coord(sensor2lidar)
-        #     lidar2sensor = left_coord_to_right_coord(lidar2sensor)
-
         self.cam2lidar = cam_coord_to_lidar_coord(sensor2lidar)
         self.lidar2cam = lidar_coord_to_cam_coord(lidar2sensor)
-        # self.img2lidar = np.dot(self.cam2lidar, np.linalg.inv(self.cam2img))
         
         if cam_type != 'cam_fisheye':
             self.cam2img = get_camera_intrinsics(

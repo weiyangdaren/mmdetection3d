@@ -1,4 +1,4 @@
-_base_ = ['../../../configs/_base_/default_runtime.py']
+_base_ = ['../default_runtime.py']
 
 custom_imports = dict(
     imports=['projects.OmniDet.utils',
@@ -12,7 +12,8 @@ dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 voxel_size = [0.2, 0.2, 10]
-detect_range = [-48, -48, -5, 48, 48, 5]
+ref_range = 48
+detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
 cam_type='cam_nusc'
 train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
 val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_val.pkl'
@@ -66,8 +67,8 @@ test_pipeline = [
         color_type='color',
         backend_args=backend_args,
         load_cam_type=cam_type,
-        load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
+        load_cam_names=['nu_rgb_camera_front_left',
+                        'nu_rgb_camera_front_right',
                         'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
     dict(
         type='ResizeCropFlipImage', data_aug_conf=ida_aug_conf, training=False),
@@ -222,7 +223,7 @@ test_evaluator = val_evaluator
 
 
 learning_rate = 0.0002
-max_epochs = 40
+max_epochs = 20
 param_scheduler = [
     dict(
         type='LinearLR',
@@ -236,7 +237,7 @@ param_scheduler = [
         T_max=max_epochs,
         end=max_epochs,
         by_epoch=True,
-        eta_min_ratio=1e-4,
+        eta_min_ratio=5e-4,
         convert_to_iter_based=True),
     # momentum scheduler
     # During the first 8 epochs, momentum increases from 1 to 0.85 / 0.95

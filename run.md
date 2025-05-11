@@ -1,5 +1,6 @@
 # Run demo
 ```bash
+python demo/pcd_demo.py data/CarlaCollection/train-Town01_Opt-ClearNoon-2024_09_23_11_44_45/ego0/lidar/00026981.bin configs/second/second_hv_secfpn_8xb6-80e_kitti-3d-3class.py ckpts/second_hv_secfpn_8xb6-80e_kitti-3d-3class-b086d0a3.pth
 python demo/pcd_demo.py demo/data/kitti/000008.bin configs/my_cfgs/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-car.py ckpts/hv_pointpillars_secfpn_6x8_160e_kitti-3d-car_20220331_134606-d42d15ed.pth --show
 ```
 

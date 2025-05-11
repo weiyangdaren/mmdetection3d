@@ -36,7 +36,7 @@ class OmniPETR(MVXTwoStageDetector):
             self.img_key = None
             self.lidar_key = None
         
-        self.use_lidar2img = False if self.img_key == 'cam_fisheye' else True
+        self.use_lidar2img = True if pts_bbox_head.type == 'PETRHead' else False
 
         pts_bbox_head.update(input_key=self.img_key)
 

@@ -3,7 +3,6 @@ from typing import Optional, Union, List
 
 import mmcv
 import numpy as np
-# from mmcv.transforms.base import BaseTransform
 from mmengine.fileio import get
 
 from mmdet3d.datasets.transforms import LoadPointsFromFile, LoadMultiViewImageFromFiles
@@ -180,7 +179,3 @@ class LoadOmni3DMultiViewImageFromFiles(LoadMultiViewImageFromFiles):
         # results.pop('cam_info')
         results[self.load_cam_type] = ret_dict
         return results
-
-
-@TRANSFORMS.register_module()
-class RandomDropSensor():
