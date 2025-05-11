@@ -1,11 +1,45 @@
 from typing import Optional, Union, List, Tuple
 import cv2
+import copy
 from matplotlib.artist import get
 import numpy as np
 
 from mmcv.transforms.base import BaseTransform
 from mmdet3d.registry import TRANSFORMS
 from ocamcamera import OcamCamera
+from scipy.spatial.transform import Rotation as R
+
+
+def lidar_coord_to_cam_coord(matrix):
+    #           ^ z                . z
+    #           |                 /
+    #           |       to:      +-------> x
+    #           |  . x           |
+    #           | /              |
+    # y <-------+                v y
+    M = np.array([[ 0, -1,  0,  0 ],
+                  [ 0,  0, -1,  0 ],
+                  [ 1,  0,  0,  0 ],
+                  [ 0,  0,  0,  1 ]])
+    return np.dot(M, matrix) # first transform to camera position, then to axis of camera coord
+
+def cam_coord_to_lidar_coord(matrix):
+    #    . z                      ^ z
+    #   /                         |
+    #  +-------> x  to:           |
+    #  |                          |  . x
+    #  |                          | /
+    #  v y              y <-------+
+    M = np.array([[ 0,  0,  1,  0 ],
+                  [-1,  0,  0,  0 ],
+                  [ 0, -1,  0,  0 ],
+                  [ 0,  0,  0,  1 ]])
+    return np.dot(matrix, M)  # first transform to axis of lidar coord, then to lidar position
+
+lidar2cam_M = np.array([[ 0, -1,  0,  0 ],
+                        [ 0,  0, -1,  0 ],
+                        [ 1,  0,  0,  0 ],
+                        [ 0,  0,  0,  1 ]])
 
 
 @TRANSFORMS.register_module()
@@ -60,11 +94,7 @@ class MultiViewFisheyePerspectiveProjection(BaseTransform):
         rays = np.stack([x_grid, y_grid, np.full_like(x_grid, f)], axis=-1)  # shape: (H, W, 3)
 
         # Rotate camera by yaw angle around y-axis
-        R_yaw = np.array([
-            [np.cos(yaw_rad), 0, np.sin(yaw_rad)],
-            [0, 1, 0],
-            [-np.sin(yaw_rad), 0, np.cos(yaw_rad)]
-        ])
+        R_yaw = R.from_euler('y', yaw_deg, degrees=True).as_matrix()
         rays_rotated = rays @ R_yaw.T  # shape: (H, W, 3)
 
         # Reshape to (3, N) for ocam.world2cam
@@ -102,9 +132,12 @@ class MultiViewFisheyePerspectiveProjection(BaseTransform):
                 new_imgs.append(new_img)
                 R_yaw = np.eye(4)
                 R_yaw[:3, :3] = _R_yaw
-                _lidar2cam = np.dot(R_yaw, results['cam_fisheye']['lidar2cam'][i])
+                _lidar2cam = copy.deepcopy(results['cam_fisheye']['lidar2cam'][i])
+                _lidar2cam = np.linalg.inv(lidar2cam_M) @ R_yaw @ lidar2cam_M @ _lidar2cam
                 lidar2cam.append(_lidar2cam)
-                _cam2lidar = np.linalg.inv(_lidar2cam)
+               
+                _cam2lidar = copy.deepcopy(results['cam_fisheye']['cam2lidar'][i])
+                _cam2lidar = _cam2lidar @ R_yaw
                 cam2lidar.append(_cam2lidar)
 
                 _cam2img = self.get_camera_intrinsics(h, w, self.perspective_fov)

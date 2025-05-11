@@ -255,10 +255,14 @@ class LSSTransform(BaseViewTransform):
 
         x = self.depthnet(x)
         depth = x[:, :self.D].softmax(dim=1)
+
         x = depth.unsqueeze(1) * x[:, self.D:(self.D + self.C)].unsqueeze(2)
 
         x = x.view(B, N, self.C, self.D, fH, fW)
         x = x.permute(0, 1, 3, 4, 5, 2)
+
+        #debug
+        # x = torch.ones_like(x)
         return x
 
     def forward(self, *args, **kwargs):

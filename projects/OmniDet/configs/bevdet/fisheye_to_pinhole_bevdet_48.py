@@ -12,6 +12,10 @@ custom_imports = dict(
 
 dataset_type = 'Omni3DDataset'
 data_root = 'data/CarlaCollection/'
+# train_ann_file = 'ImageSets-2hz-mini/omni3d_infos_train.pkl'
+# val_ann_file = 'ImageSets-2hz-mini/omni3d_infos_val.pkl'
+train_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_train.pkl'
+val_ann_file = 'ImageSets-2hz-0.7-all/omni3d_infos_val.pkl'
 classes = ['Car', 'Van', 'Truck', 'Bus', 'Pedestrian', 'Cyclist']
 ref_range = 48
 detect_range = [-ref_range, -ref_range, -5, ref_range, ref_range, 5]
@@ -252,7 +256,7 @@ train_dataloader = dict(
         dataset=dict(
             type=dataset_type,
             data_root=data_root,
-            ann_file='ImageSets-2hz-0.7-all/omni3d_infos_train.pkl',
+            ann_file=train_ann_file,
             pipeline=train_pipeline,
             test_mode=False,
             metainfo=dict(classes=classes),
@@ -267,7 +271,7 @@ val_dataloader = dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='ImageSets-2hz-0.7-all/omni3d_infos_val.pkl',
+        ann_file=val_ann_file,
         pipeline=test_pipeline,
         test_mode=True,
         metainfo=dict(classes=classes),

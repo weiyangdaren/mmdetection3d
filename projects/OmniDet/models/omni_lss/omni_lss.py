@@ -195,7 +195,10 @@ class OmniLSS(Base3DDetector):
         # debug visualization
         import matplotlib.pyplot as plt
         plt.figure('bev')
-        _bev = bev_feat[0].sum(0).detach().cpu().numpy()
+        _bev = bev_feat[0].sum(0)
+        _bev = torch.clamp(_bev, 1e-8, 1)
+        _bev = torch.log(_bev)
+        _bev = _bev.detach().cpu().numpy()
         plt.imshow(_bev, cmap='jet')
         plt.show()
 

@@ -40,8 +40,7 @@ train_pipeline = [
         backend_args=backend_args,
         load_cam_type=cam_type,
         load_cam_names=['nu_rgb_camera_front', 'nu_rgb_camera_front_left',
-                        'nu_rgb_camera_front_right', 'nu_rgb_camera_rear',
-                        'nu_rgb_camera_rear_right', 'nu_rgb_camera_rear_left']),
+                        ]),
 
     # dict(
     #     type='LoadOmni3DPointsFromFile',
