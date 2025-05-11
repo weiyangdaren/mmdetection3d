@@ -75,7 +75,7 @@ class MultiViewFisheyePerspectiveProjection(BaseTransform):
 
         # Sample fisheye image
         out = cv2.remap(img, mapx, mapy, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-        return out
+        return out, R_yaw
 
     @staticmethod
     def get_camera_intrinsics(img_height, img_width, view_fov):
@@ -97,19 +97,24 @@ class MultiViewFisheyePerspectiveProjection(BaseTransform):
             # plt.imshow(img.astype(np.uint8))
             for j in range(self.num_imgs):
                 w, h = self.image_size
-                new_img = self.generate_perspective_map(
+                new_img, _R_yaw = self.generate_perspective_map(
                     self.omni_ocam, img, w, h, self.perspective_fov,  self.camera_orientation[j])
                 new_imgs.append(new_img)
-                lidar2cam.append(results['cam_fisheye']['lidar2cam'][i])
-                cam2lidar.append(results['cam_fisheye']['cam2lidar'][i])
+                R_yaw = np.eye(4)
+                R_yaw[:3, :3] = _R_yaw
+                _lidar2cam = np.dot(R_yaw, results['cam_fisheye']['lidar2cam'][i])
+                lidar2cam.append(_lidar2cam)
+                _cam2lidar = np.linalg.inv(_lidar2cam)
+                cam2lidar.append(_cam2lidar)
+
                 _cam2img = self.get_camera_intrinsics(h, w, self.perspective_fov)
                 cam2img.append(_cam2img)
-                _lidar2img = np.dot(_cam2img, results['cam_fisheye']['lidar2cam'][i])
+                _lidar2img = np.dot(_cam2img, _lidar2cam)
                 lidar2img.append(_lidar2img)
 
-            #     plt.figure('new_img_{}_{}'.format(i, j))
-            #     plt.imshow(new_img.astype(np.uint8))
-            # plt.show()
+        #         plt.figure('new_img_{}_{}'.format(i, j))
+        #         plt.imshow(new_img.astype(np.uint8))
+        # plt.show()
 
         lidar2cam = np.stack(lidar2cam, axis=0)
         cam2lidar = np.stack(cam2lidar, axis=0)

@@ -40,6 +40,15 @@ train_pipeline = [
         num_imgs_of_per_view=2,
         camera_orientation=[-cam_fov//4, cam_fov//4],),
     dict(
+        type='ImageAug3D',
+        final_dim=[400, 400],
+        resize_lim=[1, 1],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0, 0],
+        rand_flip=False,
+        is_train=False,
+        img_key=cam_type,),
+    dict(
         type='LoadAnnotations3D',
         with_bbox_3d=True,
         with_label_3d=True,),
@@ -70,6 +79,15 @@ test_pipeline = [
         perspective_fov=cam_fov//2,
         num_imgs_of_per_view=2,
         camera_orientation=[-cam_fov//4, cam_fov//4],),
+    dict(
+        type='ImageAug3D',
+        final_dim=[400, 400],
+        resize_lim=[1, 1],
+        bot_pct_lim=[0.0, 0.0],
+        rot_lim=[0, 0],
+        rand_flip=False,
+        is_train=False,
+        img_key=cam_type,),
     dict(
         type='OmniPack3DDetInputs',
         keys=[cam_type, 'gt_bboxes_3d', 'gt_labels_3d'],

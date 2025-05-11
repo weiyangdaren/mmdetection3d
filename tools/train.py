@@ -13,6 +13,7 @@ from mmdet3d.utils import replace_ceph_backend
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
+torch.set_num_threads(4)  # 限制主进程线程数
 
 
 def parse_args():
