@@ -213,7 +213,7 @@ test_dataloader = val_dataloader
 
 # TODO
 val_evaluator = dict(
-    type='Omni3DMetricEXP',
+    type='Omni3DMetric',
 )
 test_evaluator = val_evaluator
 
